@@ -11,7 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.0
+// @version      1.1
 // @author       wOxxOm & Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -20,13 +20,17 @@
 
 const POPUP = document.createElement('a');
 POPUP.id = GM_info.script.name;
-POPUP.title = 'Original Link';
+POPUP.title = '原始链接';
 let isPopupStyled;
 let lastLink;
 let hoverTimer;
 let hoverStopTimer;
+let cachedRules = [];
 
 // --- Custom Rules Logic Start ---
+
+// 初始化时加载规则
+loadRules();
 
 // 注册菜单
 GM_registerMenuCommand("设置面板", openSettings);
@@ -35,29 +39,63 @@ function getRules() {
     return GM_getValue('custom_rules', []);
 }
 
-function saveRules(rules) {
-    GM_setValue('custom_rules', rules);
+// 加载并预编译规则 (优化性能的关键)
+function loadRules() {
+    const rawRules = getRules();
+    cachedRules = rawRules.map(rule => {
+        // 确保 enabled 默认为 true
+        if (rule.enabled === undefined) rule.enabled = true;
+
+        // 预编译匹配正则
+        let matchRegex = null;
+        if (rule.useRegexMatch && rule.match) {
+            try { matchRegex = new RegExp(rule.match); } catch(e) {}
+        }
+
+        // 预编译查找正则
+        let findRegex = null;
+        if (rule.find) {
+            try {
+                if (rule.useRegexFind) {
+                    findRegex = new RegExp(rule.find, 'g');
+                } else {
+                    const escapedFind = rule.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    findRegex = new RegExp(escapedFind, 'g');
+                }
+            } catch(e) {}
+        }
+
+        return {
+            ...rule,
+            _matchRegex: matchRegex, // 缓存编译好的正则对象
+            _findRegex: findRegex
+        };
+    });
 }
 
-// 应用自定义规则
+function saveRules(rules) {
+    GM_setValue('custom_rules', rules);
+    loadRules(); // 保存后重新加载缓存
+}
+
+// 应用自定义规则 (使用缓存 速度极快)
 function applyCustomRules(a) {
     const href = a.href;
     const hostname = a.hostname;
-    const rules = getRules();
 
-    for (const rule of rules) {
-        // 新增：检查规则是否启用 (默认为 true)
+    // 直接遍历缓存的规则 无需重复 new RegExp
+    for (const rule of cachedRules) {
         if (rule.enabled === false) continue;
 
         try {
             let isMatch = false;
 
-            // 判断匹配方式：正则匹配 URL 还是 文本匹配域名
             if (rule.useRegexMatch) {
-                const matchRegex = new RegExp(rule.match);
-                isMatch = matchRegex.test(href);
+                // 使用预编译的正则
+                if (rule._matchRegex) {
+                    isMatch = rule._matchRegex.test(href);
+                }
             } else {
-                // 默认：匹配域名 (只要域名包含该字符串即匹配)
                 if (rule.match && hostname.includes(rule.match)) {
                     isMatch = true;
                 }
@@ -65,44 +103,30 @@ function applyCustomRules(a) {
 
             if (isMatch) {
                 let newUrl = href;
-                let searchPattern;
                 let replaceText = rule.replace || "";
 
-                // 构建查找模式
-                if (rule.useRegexFind) {
-                    // 如果是正则查找 使用全局匹配
-                    searchPattern = new RegExp(rule.find, 'g');
-                } else {
-                    // 如果是普通文本查找 转义正则字符并全局匹配
-                    const escapedFind = rule.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    searchPattern = new RegExp(escapedFind, 'g');
+                // 使用预编译的查找正则
+                if (rule._findRegex) {
+                    if (!rule.useRegexReplace) {
+                        replaceText = replaceText.replace(/\$/g, '$$$$');
+                    }
+                    newUrl = newUrl.replace(rule._findRegex, replaceText);
                 }
 
-                // 处理替换文本
-                if (!rule.useRegexReplace) {
-                    // 如果不使用正则替换 需要转义 $ 符号
-                    replaceText = replaceText.replace(/\$/g, '$$$$');
-                }
-
-                // 执行替换
-                newUrl = newUrl.replace(searchPattern, replaceText);
-
-                // 新增：始终进行 URL 解码 (类似默认规则的行为)
+                // URL 解码
                 try {
                     newUrl = decodeURIComponent(newUrl);
-                } catch (e) {
-                    // 如果解码失败（例如存在无效的 % 序列） 则保持替换后的原样
-                }
+                } catch (e) {}
 
-                // 如果链接发生了变化
                 if (newUrl !== href) {
-                    a.hrefUndecloaked = href; // 保存原始链接用于悬停显示
+                    a.hrefUndecloaked = href;
                     a.href = newUrl;
                     a.rel = 'external noreferrer nofollow noopener';
-                    return true; // 表示已应用自定义规则
+                    return true;
                 }
             }
         } catch (e) {
+            console.error("Decloak Script: Rule execution error", e, rule);
         }
     }
     return false;
