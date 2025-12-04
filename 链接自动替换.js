@@ -11,7 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.1
+// @version      1.2
 // @author       wOxxOm & Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -26,6 +26,7 @@ let lastLink;
 let hoverTimer;
 let hoverStopTimer;
 let cachedRules = [];
+const urlCache = new Map();
 
 // --- Custom Rules Logic Start ---
 
@@ -75,50 +76,57 @@ function loadRules() {
 
 function saveRules(rules) {
     GM_setValue('custom_rules', rules);
-    loadRules(); // 保存后重新加载缓存
+    loadRules();
+    urlCache.clear(); // 规则变了 旧的缓存结果就失效了 必须清空
 }
 
 // 应用自定义规则 (使用缓存 速度极快)
 function applyCustomRules(a) {
     const href = a.href;
+
+    // 1. 查缓存：如果这个 URL 之前计算过 直接用结果
+    if (urlCache.has(href)) {
+        const cachedResult = urlCache.get(href);
+        // 如果缓存结果是 null 说明之前算过但不匹配任何规则 直接返回 false
+        if (cachedResult === null) return false;
+
+        // 命中缓存且有替换结果 直接应用
+        a.hrefUndecloaked = href;
+        a.href = cachedResult;
+        a.rel = 'external noreferrer nofollow noopener';
+        return true;
+    }
+
     const hostname = a.hostname;
 
-    // 直接遍历缓存的规则 无需重复 new RegExp
+    // 2. 没缓存 开始遍历规则
     for (const rule of cachedRules) {
         if (rule.enabled === false) continue;
 
         try {
             let isMatch = false;
-
+            // ... (正则匹配逻辑同前) ...
             if (rule.useRegexMatch) {
-                // 使用预编译的正则
-                if (rule._matchRegex) {
-                    isMatch = rule._matchRegex.test(href);
-                }
+                if (rule._matchRegex) isMatch = rule._matchRegex.test(href);
             } else {
-                if (rule.match && hostname.includes(rule.match)) {
-                    isMatch = true;
-                }
+                if (rule.match && hostname.includes(rule.match)) isMatch = true;
             }
 
             if (isMatch) {
                 let newUrl = href;
-                let replaceText = rule.replace || "";
-
-                // 使用预编译的查找正则
+                // ... (替换逻辑同前) ...
                 if (rule._findRegex) {
-                    if (!rule.useRegexReplace) {
-                        replaceText = replaceText.replace(/\$/g, '$$$$');
-                    }
-                    newUrl = newUrl.replace(rule._findRegex, replaceText);
+                     let replaceText = rule.replace || "";
+                     if (!rule.useRegexReplace) replaceText = replaceText.replace(/\$/g, '$$$$');
+                     newUrl = newUrl.replace(rule._findRegex, replaceText);
                 }
 
-                // URL 解码
-                try {
-                    newUrl = decodeURIComponent(newUrl);
-                } catch (e) {}
+                try { newUrl = decodeURIComponent(newUrl); } catch (e) {}
 
                 if (newUrl !== href) {
+                    // 3. 找到匹配：写入缓存 (原始URL -> 新URL)
+                    urlCache.set(href, newUrl);
+
                     a.hrefUndecloaked = href;
                     a.href = newUrl;
                     a.rel = 'external noreferrer nofollow noopener';
@@ -126,9 +134,13 @@ function applyCustomRules(a) {
                 }
             }
         } catch (e) {
-            console.error("Decloak Script: Rule execution error", e, rule);
         }
     }
+
+    // 4. 遍历完所有规则都没匹配：写入缓存 (原始URL -> null)
+    // 防止下次遇到同样的 URL 又跑一遍循环
+    urlCache.set(href, null);
+
     return false;
 }
 
