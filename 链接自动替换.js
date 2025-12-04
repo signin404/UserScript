@@ -241,7 +241,7 @@ function openSettings() {
         }
 
         /* 特定输入框颜色 */
-        .rule-match { color: rgb(138, 180, 248) !important; }
+        .rule-match { color: rgb(77, 171, 247) !important; }
         .rule-find { color: rgb(246, 182, 78) !important; }
         .rule-replace { color: rgb(178, 139, 247) !important; }
 
