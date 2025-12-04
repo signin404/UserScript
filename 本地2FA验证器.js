@@ -92,7 +92,7 @@
         #totp-close-btn { cursor: pointer; font-size: 20px; line-height: 1; color: #aaa; border: none; background: none; padding: 0; }
         #totp-close-btn:hover { color: #fff; }
         #totp-search-container { padding: 2px; border-bottom: 1px solid #555; background: rgb(44, 44, 44); }
-        #totp-search-box { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #666; border-radius: 0; font-size: 12px; outline: none; background-color: #222; color: #fff; }
+        #totp-search-box { width: 100% !important; height: 30px !important; min-height: 30px !important; max-height: 30px !important; box-sizing: border-box !important; padding: 0 8px !important; margin: 0 !important; border: 1px solid #666 !important; border-radius: 0 !important; font-size: 12px !important; line-height: normal !important; outline: none !important; background-color: #222 !important; color: #fff !important; display: block !important;box-shadow: none !important; }
         #totp-search-box:focus { border-color: #007bff; }
         #totp-list { list-style: none; padding: 0; margin: 0; max-height: 400px; overflow-y: auto; background: rgb(44, 44, 44); scrollbar-width: thin; scrollbar-color: #666 #333; }
         #totp-list::-webkit-scrollbar { width: 8px; }
@@ -123,8 +123,8 @@
         #totp-modal h4 { margin: 0 0 15px 0; font-size: 16px; color: #fff; text-align: center; }
         .totp-form-group { margin-bottom: 12px; }
         .totp-form-group label { display: block; font-size: 12px; color: #aaa; margin-bottom: 4px; }
-        .totp-form-group input { width: 100%; padding: 6px; box-sizing: border-box; border: 1px solid #666; border-radius: 0; font-size: 13px; background-color: #222; color: #fff; }
-        .totp-form-group input:focus { border-color: #4dabf7; outline: none; }
+        .totp-form-group input { width: 100% !important; height: 32px !important; min-height: 32px !important;max-height: 32px !important;padding: 0 8px !important; box-sizing: border-box !important; border: 1px solid #666 !important; border-radius: 0 !important; font-size: 13px !important; line-height: normal !important;background-color: #222 !important; color: #fff !important; margin: 0 !important;display: block !important;box-shadow: none !important; }
+        .totp-form-group input:focus { border-color: #4dabf7 !important; outline: none !important; }
         .totp-modal-btns { display: flex; justify-content: space-between; margin-top: 15px; gap: 10px; }
         .totp-modal-btn { flex: 1; padding: 8px; border: none; border-radius: 0; cursor: pointer; font-size: 13px; color: #fff; }
         #totp-modal-save { background-color: #007bff; }
