@@ -11,7 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.3
+// @version      1.4
 // @author       wOxxOm & Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -191,6 +191,7 @@ function openSettings() {
             margin-bottom: 10px !important;
             height: 30px !important;
             padding: 0 6px !important; /* 修改：添加 5px 左右内边距 与下方规则行对齐 */
+            flex-shrink: 0 !important;
         }
 
         /* 标题绝对居中 */
@@ -243,6 +244,7 @@ function openSettings() {
             display: flex !important; gap: 5px !important; padding: 0 5px 5px 5px !important;
             font-weight: bold !important; font-size: 12px !important; color: #ccc !important;
             border-bottom: 1px solid #555 !important; margin-bottom: 0 !important;
+            flex-shrink: 0 !important;
         }
         .decloak-rules-container {
             flex: 1 !important;
@@ -362,6 +364,7 @@ function openSettings() {
             background: #333 !important;
             color: #ccc !important;
             border: 1px solid #555 !important; /* 改为实线 */
+            flex-shrink: 0 !important;
         }
         #decloak-add-rule:hover {
             background: #3a3a3a !important;
@@ -373,6 +376,7 @@ function openSettings() {
             display: flex !important;
             justify-content: flex-end !important;
             gap: 10px !important;
+            flex-shrink: 0 !important;
         }
 
         /* 输入框组合样式 */
