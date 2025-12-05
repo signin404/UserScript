@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_addValueChangeListener
-// @version      1.6
+// @version      1.7
 // @author       Max & Gemini
 // @license      MPL2.0
 // ==/UserScript==
@@ -132,22 +132,26 @@ class WebElementHandler {
             matchingRules: '当前域名规则',
             noMatchingRules: '当前域名下无任何规则',
             addRuleSection: '',
-            ruleName: '规则名称',
-            urlPattern: '网址正则表达式',
+            ruleName: '名称',
+            urlPattern: '网址',
             selectorType: '选择器类型',
             selector: '选择器',
-            selectValue: '若为选择框则匹配文本',
+            selectValue: '选择框文本',
             selectValuePlaceholder: '填写显示的文本',
             nthElement: '第几个元素 (从 1 开始)',
             clickDelay: '点击延迟 (毫秒)',
-            keepClicking: '持续点击元素',
-            ifLinkOpen: '若为链接则打开',
+            clickMethod: '点击方法',
+            methodNative: 'Native',
+            methodPointer: 'PointerEvent',
+            simulateHover: '模拟悬停',
+            keepClicking: '持续点击',
+            ifLinkOpen: '打开链接',
             addRule: '新增规则',
             save: '保存',
             delete: '删除',
-            ruleNamePlaceholder: '例如: 规则1',
-            urlPatternPlaceholder: '例如: www\\.example\\.com',
-            selectorPlaceholder: '例如: button.submit 或 //button[@class="submit"]',
+            ruleNamePlaceholder: '规则名称',
+            urlPatternPlaceholder: '网址正则表达式',
+            selectorPlaceholder: 'button.submit"]',
             invalidRegex: '无效的正则表达式',
             invalidSelector: '无效的选择器',
             createRuleByClick: '选择元素',
@@ -173,7 +177,6 @@ class WebElementHandler {
     }
 
     // 验证规则输入
-    // 【新增】用于转义正则表达式特殊字符的辅助方法
     escapeRegex(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
@@ -205,6 +208,9 @@ class WebElementHandler {
         const safeSelector = escapeHTML(rule.selector);
         const safeSelectValue = escapeHTML(rule.selectValue);
 
+        // 默认值处理
+        const clickMethod = rule.clickMethod || 'native';
+
         ruleDiv.innerHTML = `
                 <div class="ruleHeader" id="ruleHeader${ruleIndex}">
                     <strong>${rule.ruleName || `规则 ${ruleIndex + 1}`}</strong>
@@ -225,15 +231,34 @@ class WebElementHandler {
                     <input type="text" id="updateSelectValue${ruleIndex}" value="${safeSelectValue}" placeholder="${i18n.selectValuePlaceholder}">
                     <label>${i18n.nthElement}</label>
                     <input type="number" id="updateNthElement${ruleIndex}" min="1" value="${rule.nthElement}">
+
+                    <!-- 1. 点击延迟 -->
                     <label>${i18n.clickDelay}</label>
                     <input type="number" id="updateClickDelay${ruleIndex}" min="100" value="${rule.clickDelay || 1000}">
+
+                    <!-- 2. 点击方法 -->
+                    <label>${i18n.clickMethod}</label>
+                    <select id="updateClickMethod${ruleIndex}">
+                        <option value="native" ${clickMethod === 'native' ? 'selected' : ''}>${i18n.methodNative}</option>
+                        <option value="pointer" ${clickMethod === 'pointer' ? 'selected' : ''}>${i18n.methodPointer}</option>
+                    </select>
+
+                <div class="checkbox-row">
                     <div class="checkbox-container">
-                    <label>${i18n.keepClicking}</label>
-                    <input type="checkbox" id="updateKeepSearching${ruleIndex}" ${rule.keepClicking ? 'checked' : ''}>
-                </div>
-                <div class="checkbox-container">
-                    <label>${i18n.ifLinkOpen}</label>
-                    <input type="checkbox" id="updateIfLink${ruleIndex}" ${rule.ifLinkOpen ? 'checked' : ''}>
+                        <label>${i18n.keepClicking}</label>
+                        <input type="checkbox" id="updateKeepSearching${ruleIndex}" ${rule.keepClicking ? 'checked' : ''}>
+                    </div>
+
+                    <!-- 3. 模拟悬停 -->
+                    <div class="checkbox-container">
+                        <label>${i18n.simulateHover}</label>
+                        <input type="checkbox" id="updateSimulateHover${ruleIndex}" ${rule.simulateHover ? 'checked' : ''}>
+                    </div>
+
+                    <div class="checkbox-container">
+                        <label>${i18n.ifLinkOpen}</label>
+                        <input type="checkbox" id="updateIfLink${ruleIndex}" ${rule.ifLinkOpen ? 'checked' : ''}>
+                    </div>
                 </div>
 
                     <button id="updateRule${ruleIndex}">${i18n.save}</button>
@@ -261,17 +286,16 @@ class WebElementHandler {
         menu.style.padding = '10px';
         menu.style.zIndex = '2147483647';
         menu.style.maxWidth = '400px';
-        menu.style.minWidth = '230px'; // 新增: 设置最小宽度
+        menu.style.minWidth = '230px';
         menu.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
         menu.innerHTML = `
             <style>
-                /* 【新增】固定字体大小 */
                 #autoClickMenu {
                     overflow-y: auto;
                     max-height: 80vh;
                     font-size: 9px;
                     scrollbar-gutter: stable;
-                    padding-right: 8px; /* 略大于滚动条宽度 */
+                    padding-right: 8px;
                 }
                 /* 【新增】滚动条样式 */
                 #autoClickMenu::-webkit-scrollbar {
@@ -282,11 +306,7 @@ class WebElementHandler {
                 }
                 #autoClickMenu::-webkit-scrollbar-thumb {
                     background-color: rgb(159, 159, 159);
-                    border-radius: 4px;
-                }
-                #autoClickMenu {
-                    overflow-y: auto;
-                    max-height: 80vh;
+                    border-radius: 0px;
                 }
                 #autoClickMenu input:not([type="checkbox"]), #autoClickMenu select, #autoClickMenu button {
                     background: rgb(50, 50, 50);
@@ -294,12 +314,13 @@ class WebElementHandler {
                     border: 1px solid rgb(80, 80, 80);
                     margin: 5px 0;
                     padding: 5px;
-                    width: 100%;
-                    box-sizing: border-box;
-                    height: 29px; /* 新增固定高度 */
-                    font-size: 9px; /* 新增固定字体大小 */
+                    width: 100% !important;
+                    min-width: 100% !important;
+                    max-width: 100% !important;
+                    box-sizing: border-box !important;
+                    height: 29px;
+                    font-size: 9px;
                 }
-                /* 【新增】固定标题和提示文本的字体大小 */
                 #autoClickMenu h3, #autoClickMenu h4, #autoClickMenu p, #autoClickMenu label {
                     font-size: 9px;
                     display: block;
@@ -324,18 +345,28 @@ class WebElementHandler {
                     display: flex;
                     align-items: center;
                     margin-top: 5px;
+                    margin-right: 3px; /* 增加右侧间距 */
+                }
+
+                /* 新增样式：横向排列容器 */
+                #autoClickMenu .checkbox-row {
+                    display: flex;
+                    flex-direction: row;
+                    flex-wrap: wrap; /* 宽度不足时自动换行 */
+                    align-items: center;
                 }
                 #autoClickMenu .ruleHeader {
                     cursor: pointer;
                     background: rgb(50, 50, 50);
                     padding: 5px;
                     margin: 5px 0;
-                    border-radius: 3px;
+                    border-radius: 0px;
+                    border: 1px solid rgb(80, 80, 80);
                 }
                 #autoClickMenu .readRule {
                     padding: 5px;
                     border: 1px solid rgb(80, 80, 80);
-                    border-radius: 3px;
+                    border-radius: 0px;
                     margin-bottom: 5px;
                 }
                 #autoClickMenu .headerContainer {
@@ -345,10 +376,12 @@ class WebElementHandler {
                     margin-bottom: 10px;
                 }
                 #autoClickMenu .closeButton {
-                    width: auto;
+                    width: auto !important;
+                    min-width: auto !important;
                     padding: 5px 10px;
                     margin: 0;
-                /* 【新增】移除删除按钮的圆角 */
+                }
+                #autoClickMenu button[id^="updateRule"],
                 #autoClickMenu button[id^="deleteRule"] {
                     border-radius: 0;
                 }
@@ -359,13 +392,11 @@ class WebElementHandler {
                         <button id="closeMenu" class="closeButton">✕</button>
                     </div>
                     <div id="rulesList"></div>
-                    <!-- 【新增】换行 用于分隔规则列表和新增区域 -->
-                    ―――――――――――――――――――――――――――――――――――
+                    ――――――――――――――――――――――――――――――――――――――
                     <h4>${i18n.addRuleSection}</h4>
                     <label>${i18n.ruleName}</label>
                     <input type="text" id="ruleName" placeholder="${i18n.ruleNamePlaceholder}">
                     <label>${i18n.urlPattern}</label>
-                    <!-- 【修改】使用转义后的域名作为默认值 -->
                     <input type="text" id="urlPattern" value="${defaultEscapedUrl}" placeholder="${i18n.urlPatternPlaceholder}">
                     <label>${i18n.selectorType}</label>
                     <select id="selectorType">
@@ -378,15 +409,34 @@ class WebElementHandler {
                     <input type="text" id="selectValue" placeholder="${i18n.selectValuePlaceholder}">
                     <label>${i18n.nthElement}</label>
                     <input type="number" id="nthElement" min="1" value="1">
+
+                    <!-- 1. 点击延迟 -->
                     <label>${i18n.clickDelay}</label>
                     <input type="number" id="clickDelay" min="50" value="1000">
+
+                    <!-- 2. 点击方法 -->
+                    <label>${i18n.clickMethod}</label>
+                    <select id="clickMethod">
+                        <option value="native">${i18n.methodNative}</option>
+                        <option value="pointer">${i18n.methodPointer}</option>
+                    </select>
+
+                <div class="checkbox-row">
                     <div class="checkbox-container">
-                    <label>${i18n.keepClicking}</label>
-                    <input type="checkbox" id="keepClicking">
-                </div>
-                <div class="checkbox-container">
-                    <label>${i18n.ifLinkOpen}</label>
-                    <input type="checkbox" id="ifLinkOpen">
+                        <label>${i18n.keepClicking}</label>
+                        <input type="checkbox" id="keepClicking">
+                    </div>
+
+                    <!-- 3. 模拟悬停 -->
+                    <div class="checkbox-container">
+                        <label>${i18n.simulateHover}</label>
+                        <input type="checkbox" id="simulateHover">
+                    </div>
+
+                    <div class="checkbox-container">
+                        <label>${i18n.ifLinkOpen}</label>
+                        <input type="checkbox" id="ifLinkOpen">
+                    </div>
                 </div>
 
                     <button id="addRule" style="margin-top: 10px;">${i18n.addRule}</button>
@@ -417,19 +467,23 @@ class WebElementHandler {
                 selectValue: document.getElementById('selectValue').value || '',
                 nthElement: parseInt(document.getElementById('nthElement').value) || 1,
                 clickDelay: parseInt(document.getElementById('clickDelay').value) || 1000,
+                clickMethod: document.getElementById('clickMethod').value,
+                simulateHover: document.getElementById('simulateHover').checked || false,
+
                 keepClicking: document.getElementById('keepClicking').checked || false,
                 ifLinkOpen: document.getElementById('ifLinkOpen').checked || false
             };
             if (!this.validateRule(newRule)) return;
             this.ruleManager.addRule(newRule);
-            // this.updateRulesElement(); // 由监听器自动更新
-            // this.clickTaskManager.clearAutoClicks(); // 由监听器自动更新
-            // this.clickTaskManager.runAutoClicks(); // 由监听器自动更新
+
+            // 重置表单
             document.getElementById('ruleName').value = '';
             document.getElementById('selector').value = '';
             document.getElementById('selectValue').value = '';
             document.getElementById('nthElement').value = '1';
             document.getElementById('clickDelay').value = '1000';
+            document.getElementById('clickMethod').value = 'native';
+            document.getElementById('simulateHover').checked = false;
             document.getElementById('keepClicking').checked = false;
             document.getElementById('ifLinkOpen').checked = false;
         });
@@ -497,27 +551,23 @@ class WebElementHandler {
                     selectValue: document.getElementById(`updateSelectValue${ruleIndex}`).value || '',
                     nthElement: parseInt(document.getElementById(`updateNthElement${ruleIndex}`).value) || 1,
                     clickDelay: parseInt(document.getElementById(`updateClickDelay${ruleIndex}`).value) || 1000,
+                    clickMethod: document.getElementById(`updateClickMethod${ruleIndex}`).value,
+                    simulateHover: document.getElementById(`updateSimulateHover${ruleIndex}`).checked || false,
+
                     keepClicking: document.getElementById(`updateKeepSearching${ruleIndex}`).checked || false,
                     ifLinkOpen: document.getElementById(`updateIfLink${ruleIndex}`).checked || false
                 };
                 if (!this.validateRule(updatedRule)) return;
                 this.ruleManager.updateRule(ruleIndex, updatedRule);
-                // this.updateRulesElement(); // 由监听器自动更新
-                // this.clickTaskManager.clearAutoClicks(); // 由监听器自动更新
-                // this.clickTaskManager.runAutoClicks(); // 由监听器自动更新
             });
 
             document.getElementById(`deleteRule${ruleIndex}`).addEventListener('click', () => {
                 this.ruleManager.deleteRule(ruleIndex);
-                // this.updateRulesElement(); // 由监听器自动更新
-                // this.clickTaskManager.clearAutoClicks(); // 由监听器自动更新
-                // this.clickTaskManager.runAutoClicks(); // 由监听器自动更新
             });
         });
     }
 
     // --- 元素选择功能 ---
-    // 【修改】替换为跨域版本
     startElementSelection() {
         const i18n = this.i18n[this.getLanguage()];
         const menu = document.querySelector('#autoClickMenuContainer');
@@ -536,7 +586,7 @@ class WebElementHandler {
         message.style.background = 'rgba(0, 0, 0, 0.5)';
         message.style.color = 'white';
         message.style.zIndex = '2147483647';
-        message.style.pointerEvents = 'none'; // 提示框不拦截点击
+        message.style.pointerEvents = 'none';
         document.body.appendChild(message);
 
         const broadcastMessage = (msg) => {
@@ -624,7 +674,6 @@ class ClickTaskManager {
 
     // 【新增】处理规则变化的函数
     handleRulesChange(name, oldValue, newValue, remote) {
-        console.log(`${GM_info.script.name}: Rules updated. Reloading tasks.`);
         this.ruleManager.clickRules = newValue || { rules: [] };
         this.clearAutoClicks();
         this.runAutoClicks();
@@ -657,7 +706,72 @@ class ClickTaskManager {
         });
     }
 
-    // 执行单条规则的自动点击 并返回是否成功
+    // --- 修复：模拟 PointerEvent 的辅助函数 ---
+    triggerPointerEvent(element, eventType) {
+        if (!element) return;
+
+        const realWindow = element.ownerDocument.defaultView || window;
+
+        // 【核心修复】计算元素中心点坐标
+        const rect = element.getBoundingClientRect();
+        const clientX = rect.left + rect.width / 2;
+        const clientY = rect.top + rect.height / 2;
+
+        const event = new PointerEvent(eventType, {
+            bubbles: true,
+            cancelable: true,
+            view: realWindow,
+            pointerId: 1,
+            width: 1,
+            height: 1,
+            isPrimary: true,
+            pointerType: 'mouse',
+            // 添加坐标信息
+            clientX: clientX,
+            clientY: clientY,
+            screenX: clientX,
+            screenY: clientY,
+            buttons: 1,
+            pressure: 0.5
+        });
+        element.dispatchEvent(event);
+
+        // 某些老式监听器可能还需要 MouseEvent
+        if (eventType.startsWith('pointer')) {
+             const mouseEventType = eventType.replace('pointer', 'mouse');
+             const mouseEvent = new MouseEvent(mouseEventType, {
+                bubbles: true,
+                cancelable: true,
+                view: realWindow,
+                clientX: clientX,
+                clientY: clientY,
+                buttons: 1
+             });
+             element.dispatchEvent(mouseEvent);
+        }
+    }
+
+    // --- 新增：执行点击动作的辅助函数 ---
+    performClick(targetElement, method, ifLinkOpen) {
+        if (targetElement.tagName === 'SELECT') {
+             return;
+        }
+
+        if (method === 'pointer') {
+            this.triggerPointerEvent(targetElement, 'pointerdown');
+            this.triggerPointerEvent(targetElement, 'mousedown');
+            this.triggerPointerEvent(targetElement, 'pointerup');
+            this.triggerPointerEvent(targetElement, 'mouseup');
+            targetElement.click();
+        } else {
+            if (ifLinkOpen && targetElement.tagName === "A" && targetElement.href) {
+                window.location.href = targetElement.href;
+            } else {
+                targetElement.click();
+            }
+        }
+    }
+
     autoClick(rule, ruleIndex) {
         try {
             const urlRegex = new RegExp(rule.urlPattern);
@@ -687,7 +801,7 @@ class ClickTaskManager {
                         if (option.textContent.trim() === targetText) {
                             const optionValue = option.value;
                             if (targetElement.value !== optionValue) {
-                                console.log(`${GM_info.script.name}: 规则 "${rule.ruleName}" 找到匹配文本 "${targetText}" 的选项 正在设置值为 "${optionValue}"`, targetElement);
+                                console.log(`${GM_info.script.name}: 规则 "${rule.ruleName}" 设置 Select 值为 "${optionValue}"`);
                                 targetElement.value = optionValue;
                                 targetElement.dispatchEvent(new Event('change', { bubbles: true }));
                                 targetElement.dispatchEvent(new Event('input', { bubbles: true }));
@@ -696,22 +810,23 @@ class ClickTaskManager {
                             break;
                         }
                     }
-
-                    if (!foundOption) {
-                        console.warn(`${GM_info.script.name}: 规则 "${rule.ruleName}" 在 <select> 元素中未找到文本为 "${targetText}" 的选项`);
-                    }
-                    return true;
-                } else {
-                    console.log(`${GM_info.script.name}: 规则 "${rule.ruleName}" 成功点击元素: `, targetElement);
-                    if (rule.ifLinkOpen && targetElement.tagName === "A" && targetElement.href) {
-                        window.location.href = targetElement.href;
-                    } else {
-                        targetElement.click();
-                    }
+                    if (!foundOption) console.warn(`${GM_info.script.name}: 未找到 Select 选项 "${targetText}"`);
                     return true;
                 }
+
+                if (rule.simulateHover) {
+                    // 【逻辑分离】仅执行悬停 不点击
+                    this.triggerPointerEvent(targetElement, 'pointerover');
+                    this.triggerPointerEvent(targetElement, 'pointerenter');
+                    this.triggerPointerEvent(targetElement, 'pointermove');
+                    console.log(`${GM_info.script.name}: 规则 "${rule.ruleName}" 已执行模拟悬停`);
+                } else {
+                    // 仅执行点击
+                    this.performClick(targetElement, rule.clickMethod, rule.ifLinkOpen);
+                }
+
+                return true;
             } else {
-                console.warn(`${GM_info.script.name}: 规则 "${rule.ruleName}" 未找到目标元素`);
                 return false;
             }
         } catch (e) {
@@ -809,7 +924,6 @@ if (window.self === window.top) {
 
     // 新增：为UI面板也添加监听器 以便在规则变化时刷新UI
     GM_addValueChangeListener('clickRules', (name, oldValue, newValue, remote) => {
-        console.log("UI detected rule change, refreshing rule list.");
         Mika.ruleManager.clickRules = newValue || { rules: [] };
         if (document.getElementById('autoClickMenuContainer')) {
             Mika.updateRulesElement();
