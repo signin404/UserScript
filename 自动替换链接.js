@@ -76,66 +76,113 @@ function saveRules(rules) {
     urlCache.clear();
 }
 
-// 应用自定义规则 (使用缓存 速度极快)
+// 应用自定义规则
 function applyCustomRules(a) {
-    const href = a.href;
+    const originalUrl = a.href;
 
-    // 1. 查缓存：如果这个 URL 之前计算过 直接用结果
-    if (urlCache.has(href)) {
-        const cachedResult = urlCache.get(href);
-        // 如果缓存结果是 null 说明之前算过但不匹配任何规则 直接返回 false
+    // 1. 查缓存
+    if (urlCache.has(originalUrl)) {
+        const cachedResult = urlCache.get(originalUrl);
         if (cachedResult === null) return false;
 
-        // 命中缓存且有替换结果 直接应用
-        a.hrefUndecloaked = href;
-        a.href = cachedResult;
-        a.rel = 'external noreferrer nofollow noopener';
+        if (cachedResult !== originalUrl) {
+            a.hrefUndecloaked = originalUrl;
+            a.href = cachedResult;
+            // 对于非 HTTP 协议 rel 属性可能不重要 但保留也无妨
+            a.rel = 'external noreferrer nofollow noopener';
+        }
         return true;
     }
 
-    const hostname = a.hostname;
+    // 获取 hostname 对于 magnet 等协议 hostname 可能是空字符串
+    const hostname = a.hostname || "";
 
-    // 2. 没缓存 开始遍历规则
+    // 2. 筛选阶段
+    const applicableRules = [];
     for (const rule of cachedRules) {
         if (rule.enabled === false) continue;
 
+        let isMatch = false;
+        if (rule.useRegexMatch) {
+            if (rule._matchRegex) isMatch = rule._matchRegex.test(originalUrl);
+        } else {
+            // 如果是普通匹配 且 hostname 为空（非HTTP协议）
+            // 建议用户使用正则匹配但如果用户非要用普通匹配匹配 magnet 协议头
+            // 可以改为检查完整 URL 是否包含字符串
+            if (rule.match) {
+                // 修改建议：为了兼容 magnet 如果 hostname 为空 则检查完整 URL
+                // 或者保持原样（只匹配域名）
+                // 这里保持原样逻辑：非正则模式下只匹配 hostname
+                // 如果用户想匹配 magnet 推荐开启正则模式使用 ^magnet:
+                if (hostname.includes(rule.match)) isMatch = true;
+            }
+        }
+
+        if (isMatch) {
+            applicableRules.push(rule);
+        }
+    }
+
+    // ... (后续代码保持不变) ...
+
+    if (applicableRules.length === 0) {
+        urlCache.set(originalUrl, null);
+        return false;
+    }
+
+    // 3. 执行阶段
+    let currentUrl = originalUrl;
+    let hasChanged = false;
+
+    for (const rule of applicableRules) {
         try {
-            let isMatch = false;
-            if (rule.useRegexMatch) {
-                if (rule._matchRegex) isMatch = rule._matchRegex.test(href);
-            } else {
-                if (rule.match && hostname.includes(rule.match)) isMatch = true;
+            let tempUrl = currentUrl;
+
+            if (rule._findRegex) {
+                let replaceText = rule.replace || "";
+                const upperReplace = replaceText.toUpperCase();
+
+                if (upperReplace === '{BASE64}') {
+                    tempUrl = tempUrl.replace(rule._findRegex, (match) => {
+                        try {
+                            const binary = atob(match);
+                            const bytes = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) {
+                                bytes[i] = binary.charCodeAt(i);
+                            }
+                            return new TextDecoder('utf-8').decode(bytes);
+                        } catch (e) { return match; }
+                    });
+                } else if (upperReplace === '{URL}') {
+                    tempUrl = tempUrl.replace(rule._findRegex, (match) => {
+                        try { return decodeURIComponent(match); } catch (e) { return match; }
+                    });
+                } else {
+                    if (!rule.useRegexReplace) replaceText = replaceText.replace(/\$/g, '$$$$');
+                    tempUrl = tempUrl.replace(rule._findRegex, replaceText);
+                }
             }
 
-            if (isMatch) {
-                let newUrl = href;
-                if (rule._findRegex) {
-                     let replaceText = rule.replace || "";
-                     if (!rule.useRegexReplace) replaceText = replaceText.replace(/\$/g, '$$$$');
-                     newUrl = newUrl.replace(rule._findRegex, replaceText);
-                }
+            try { tempUrl = decodeURIComponent(tempUrl); } catch (e) {}
 
-                try { newUrl = decodeURIComponent(newUrl); } catch (e) {}
-
-                if (newUrl !== href) {
-                    // 3. 找到匹配：写入缓存 (原始URL -> 新URL)
-                    urlCache.set(href, newUrl);
-
-                    a.hrefUndecloaked = href;
-                    a.href = newUrl;
-                    a.rel = 'external noreferrer nofollow noopener';
-                    return true;
-                }
+            if (tempUrl !== currentUrl) {
+                currentUrl = tempUrl;
+                hasChanged = true;
             }
         } catch (e) {
         }
     }
 
-    // 4. 遍历完所有规则都没匹配：写入缓存 (原始URL -> null)
-    // 防止下次遇到同样的 URL 又跑一遍循环
-    urlCache.set(href, null);
+    // 4. 结果处理
+    urlCache.set(originalUrl, currentUrl);
 
-    return false;
+    if (hasChanged) {
+        a.hrefUndecloaked = originalUrl;
+        a.href = currentUrl;
+        a.rel = 'external noreferrer nofollow noopener';
+    }
+
+    return true;
 }
 
 // 设置界面 UI
@@ -191,7 +238,6 @@ function openSettings() {
             margin-bottom: 10px !important;
             height: 30px !important;
             padding: 0 6px !important; /* 修改：添加 5px 左右内边距 与下方规则行对齐 */
-            flex-shrink: 0 !important;
         }
 
         /* 标题绝对居中 */
@@ -201,7 +247,6 @@ function openSettings() {
             width: 100% !important;
             text-align: center !important;
             font-size: 16px !important;
-            font-weight: bold !important;
             color: #fff !important;
             pointer-events: none !important; /* 防止遮挡点击 */
             z-index: 0 !important;
@@ -220,6 +265,78 @@ function openSettings() {
             color: #ccc !important;
             padding: 0 !important;
         }
+
+        /* 帮助按钮样式 */
+        #decloak-help {
+            position: static !important;
+            width: 26px !important;
+            height: auto !important;
+            border: none !important;
+            background: none !important;
+            cursor: pointer !important;
+            font-size: 15px !important;
+            font-weight: bold !important;
+            line-height: 1 !important;
+            color: #999 !important;
+            padding: 0 !important;
+            display: flex !important;
+            justify-content: center !important;
+            align-items: center !important;
+        }
+        #decloak-help:hover {
+            color: #fff !important;
+            background: none !important;
+        }
+
+        /* 修改：帮助窗口 (独立居中 无遮罩) */
+        #decloak-help-window {
+            display: none !important;
+            position: fixed !important; /* 固定定位 */
+            top: 50% !important; left: 50% !important;
+            transform: translate(-50%, -50%) !important; /* 绝对居中 */
+            width: 300px !important;
+            background: rgb(55, 55, 55) !important; /* 比主背景稍亮 */
+            border: 1px solid rgb(100, 100, 100) !important;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8) !important; /* 强阴影 */
+            z-index: 2147483647 !important; /* 最顶层 */
+            flex-direction: column !important;
+            padding: 15px !important;
+            pointer-events: auto !important;
+        }
+
+        .decloak-help-header {
+            display: flex !important; justify-content: space-between !important; align-items: center !important;
+            margin-bottom: 15px !important; border-bottom: 1px solid #666 !important; padding-bottom: 5px !important;
+        }
+        .decloak-help-title { color: #fff !important; font-size: 14px !important; }
+
+        #decloak-help-window-close {
+            border: none !important; background: none !important; cursor: pointer !important;
+            font-size: 18px !important; line-height: 1 !important; color: #ccc !important; padding: 0 !important;
+        }
+        #decloak-help-window-close:hover { color: #fff !important; }
+
+        .decloak-help-row {
+            display: flex !important; width: 100% !important; margin-bottom: 10px !important;
+            font-size: 13px !important; color: #eee !important; align-items: center !important;
+        }
+        .decloak-help-key {
+            color: rgb(178, 139, 247) !important;
+            width: 80px !important;
+            flex-shrink: 0 !important;
+            user-select: none !important; /* 防止双击选中 改为点击复制 */
+            cursor: pointer !important;   /* 显示手型 */
+            transition: color 0.2s !important;
+        }
+        .decloak-help-key:hover {
+            color: #fff !important;       /* 悬停变白 */
+            text-decoration: underline !important;
+        }
+        .decloak-help-key:active {
+            transform: scale(0.98) !important; /* 点击微缩效果 */
+        }
+
+        .decloak-help-desc { color: #ccc !important; user-select: text !important; }
 
         /* 搜索框样式 */
         #decloak-search-input {
@@ -242,9 +359,8 @@ function openSettings() {
 
         .decloak-table-header {
             display: flex !important; gap: 5px !important; padding: 0 5px 5px 5px !important;
-            font-weight: bold !important; font-size: 12px !important; color: #ccc !important;
+            font-size: 12px !important; color: #ccc !important;
             border-bottom: 1px solid #555 !important; margin-bottom: 0 !important;
-            flex-shrink: 0 !important;
         }
         .decloak-rules-container {
             flex: 1 !important;
@@ -334,7 +450,7 @@ function openSettings() {
             color: white !important;
             border-color: rgb(118, 202, 83) !important;
         }
-        .decloak-btn-toggle { margin-right: 0 !important; font-weight: bold !important; }
+        .decloak-btn-toggle { margin-right: 0 !important; }
         /* 删除按钮 - 深色版 */
         .decloak-btn-danger {
             background: #333 !important;
@@ -364,7 +480,6 @@ function openSettings() {
             background: #333 !important;
             color: #ccc !important;
             border: 1px solid #555 !important; /* 改为实线 */
-            flex-shrink: 0 !important;
         }
         #decloak-add-rule:hover {
             background: #3a3a3a !important;
@@ -376,7 +491,6 @@ function openSettings() {
             display: flex !important;
             justify-content: flex-end !important;
             gap: 10px !important;
-            flex-shrink: 0 !important;
         }
 
         /* 输入框组合样式 */
@@ -416,7 +530,7 @@ function openSettings() {
                 <!-- 4. 占位：对应 Delete 按钮 -->
                 <div style="width: 26px !important;"></div>
 
-                <!-- 关闭按钮：绝对定位右侧 -->
+                <!-- 关闭按钮 -->
                 <button id="decloak-close">&times;</button>
             </div>
 
@@ -425,7 +539,10 @@ function openSettings() {
                 <div style="width: 26px !important;"></div>
                 <div style="flex: 1.2 !important;">链接匹配</div>
                 <div style="flex: 1 !important;">查找</div>
+                <div style="flex: 1 !important; display: flex !important; align-items: center !important;">
                 <div style="flex: 1 !important;">替换</div>
+                <button id="decloak-help" title="帮助">?</button>
+                </div>
                 <div style="width: 26px !important;"></div>
             </div>
 
@@ -435,6 +552,24 @@ function openSettings() {
             <button id="decloak-add-rule" class="decloak-btn" style="width: 100% !important; margin-bottom: 10px !important; height: 30px !important;">+ 添加规则</button>
             <div class="decloak-footer">
                 <button id="decloak-save" class="decloak-btn decloak-btn-primary">保存并关闭</button>
+
+        <!-- 修改：独立的帮助窗口 -->
+        <div id="decloak-help-window">
+            <div class="decloak-help-header">
+                <span class="decloak-help-title">变量说明</span>
+                <button id="decloak-help-window-close">&times;</button>
+            </div>
+            <div class="decloak-help-row">
+                <div class="decloak-help-key">{URL}</div>
+                <div class="decloak-help-desc">URL解码</div>
+            </div>
+            <div class="decloak-help-row">
+                <div class="decloak-help-key">{BASE64}</div>
+                <div class="decloak-help-desc">BASE64解码 (UTF-8)</div>
+            </div>
+            <div class="decloak-help-row">
+                <div class="decloak-help-key">替换留空</div>
+                <div class="decloak-help-desc">表示删除查找的内容</div>
             </div>
         </div>
     `;
@@ -560,6 +695,43 @@ function openSettings() {
     };
 
     document.getElementById('decloak-close').onclick = () => modal.remove();
+
+    // 帮助按钮逻辑
+    const helpBtn = document.getElementById('decloak-help');
+    const helpWindow = document.getElementById('decloak-help-window');
+    const helpCloseBtn = document.getElementById('decloak-help-window-close');
+
+    helpBtn.onclick = () => {
+        helpWindow.style.setProperty('display', 'flex', 'important');
+    };
+
+    helpCloseBtn.onclick = () => {
+        helpWindow.style.setProperty('display', 'none', 'important');
+    };
+    // 新增：点击变量自动复制
+    const helpKeys = modal.querySelectorAll('.decloak-help-key');
+    helpKeys.forEach(key => {
+        key.onclick = () => {
+            const textToCopy = key.innerText;
+
+            // 使用剪贴板 API
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                // 复制成功的视觉反馈 (变绿)
+                const originalColor = key.style.color;
+                const originalText = key.innerText;
+
+                key.style.setProperty('color', '#4CAF50', 'important'); // 绿色
+                key.innerText = '已复制';
+
+                setTimeout(() => {
+                    key.style.setProperty('color', 'rgb(178, 139, 247)', 'important'); // 恢复原色
+                    key.innerText = originalText;
+                }, 500);
+            }).catch(err => {
+                console.error('复制失败:', err);
+            });
+        };
+    });
 }
 
 function escapeHtml(text) {
@@ -593,6 +765,10 @@ function cancelHover(e) {
 function showPopup(a) {
   if (!a.matches(':hover'))
     return;
+
+  if (!a.hrefUndecloaked)
+    return;
+
   if (!isPopupStyled) {
     isPopupStyled = true;
     POPUP.style.cssText = //'all: unset;' +
@@ -642,16 +818,28 @@ function openOriginal(e) {
 
 function decloakLink(event) {
   const a = getClosestLink(event);
-  if (!a || a === POPUP || !/^https?:$/.test(a.protocol))
+
+  // 修改 1: 这里删除了 !/^https?:$/.test(a.protocol) 的检查
+  // 允许所有类型的链接进入后续判断
+  if (!a || a === POPUP)
     return;
+
   if (a.hrefUndecloaked)
     return a;
 
-  // --- Modified: Check Custom Rules First ---
+  // --- Check Custom Rules First (支持所有协议) ---
+  // 自定义规则匹配成功后会返回 true 直接结束函数
   if (applyCustomRules(a)) {
       return a;
   }
   // ----------------------------------------
+
+  // 修改 2: 默认规则的协议检查移动到这里
+  // 如果自定义规则没匹配 且不是 HTTP/HTTPS 协议 则停止执行默认规则
+  if (!/^https?:$/.test(a.protocol))
+    return;
+
+  // --- 以下是默认规则逻辑 (仅处理 HTTP/HTTPS) ---
 
   if (/\bthis\.href\s*=[^=]/.test(a.getAttribute('onmousedown')))
     a.onmousedown = null;
