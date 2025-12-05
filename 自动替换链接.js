@@ -123,8 +123,6 @@ function applyCustomRules(a) {
         }
     }
 
-    // ... (后续代码保持不变) ...
-
     if (applicableRules.length === 0) {
         urlCache.set(originalUrl, null);
         return false;
@@ -237,7 +235,8 @@ function openSettings() {
             position: relative !important;
             margin-bottom: 10px !important;
             height: 30px !important;
-            padding: 0 6px !important; /* 修改：添加 5px 左右内边距 与下方规则行对齐 */
+            padding: 0 6px !important;
+            flex-shrink: 0 !important;
         }
 
         /* 标题绝对居中 */
@@ -361,6 +360,7 @@ function openSettings() {
             display: flex !important; gap: 5px !important; padding: 0 5px 5px 5px !important;
             font-size: 12px !important; color: #ccc !important;
             border-bottom: 1px solid #555 !important; margin-bottom: 0 !important;
+            flex-shrink: 0 !important;
         }
         .decloak-rules-container {
             flex: 1 !important;
@@ -371,7 +371,7 @@ function openSettings() {
             background: #2a2a2a !important;
         }
 
-        /* 紧凑行样式 - 深色版 */
+        /* 紧凑行样式 */
         .decloak-rule-row {
             display: flex !important;
             gap: 5px !important;
@@ -475,11 +475,12 @@ function openSettings() {
         }
         .decloak-btn-primary:hover { background: #1565C0 !important; }
 
-        /* 添加按钮 - 实线边框 */
+        /* 添加按钮 */
         #decloak-add-rule {
             background: #333 !important;
             color: #ccc !important;
-            border: 1px solid #555 !important; /* 改为实线 */
+            border: 1px solid #555 !important;
+            flex-shrink: 0 !important;
         }
         #decloak-add-rule:hover {
             background: #3a3a3a !important;
@@ -491,6 +492,7 @@ function openSettings() {
             display: flex !important;
             justify-content: flex-end !important;
             gap: 10px !important;
+            flex-shrink: 0 !important;
         }
 
         /* 输入框组合样式 */
