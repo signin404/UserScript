@@ -11,7 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.6
+// @version      1.7
 // @author       wOxxOm & Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -140,22 +140,63 @@ function applyCustomRules(a) {
                 let replaceText = rule.replace || "";
                 const upperReplace = replaceText.toUpperCase();
 
-                if (upperReplace === '{BASE64}') {
-                    tempUrl = tempUrl.replace(rule._findRegex, (match) => {
+                // 定义通用处理函数：支持捕获组
+                // 逻辑优化：
+                // 1. 如果没有捕获组 处理整个 match
+                // 2. 如果有捕获组 且第一个组匹配到了内容 处理第一个组
+                // 3. 如果有捕获组 但第一个组是 undefined (例如 (a)|b 匹配了 b) 处理整个 match
+                const processMatch = (processor) => {
+                    return (...args) => {
+                        const match = args[0];
+                        const captures = args.slice(1, -2); // 提取所有捕获组
+
+                        // 智能判断目标
+                        const target = (captures.length > 0 && captures[0] !== undefined)
+                                       ? captures[0]
+                                       : match;
+
                         try {
-                            const binary = atob(match);
-                            const bytes = new Uint8Array(binary.length);
-                            for (let i = 0; i < binary.length; i++) {
-                                bytes[i] = binary.charCodeAt(i);
-                            }
-                            return new TextDecoder('utf-8').decode(bytes);
-                        } catch (e) { return match; }
-                    });
+                            return processor(target);
+                        } catch (e) {
+                            return match; // 失败返回原匹配串
+                        }
+                    };
+                };
+
+                // --- 特殊解码处理 ---
+                if (upperReplace === '{BASE64}') {
+                    tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
+                        // 1. 预处理
+                        let base64 = target.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+                        while (base64.length % 4) base64 += '=';
+                        // 2. 解码
+                        const binary = atob(base64);
+                        const bytes = new Uint8Array(binary.length);
+                        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                        return new TextDecoder('utf-8').decode(bytes);
+                    }));
                 } else if (upperReplace === '{URL}') {
-                    tempUrl = tempUrl.replace(rule._findRegex, (match) => {
-                        try { return decodeURIComponent(match); } catch (e) { return match; }
-                    });
+                    tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
+                        return decodeURIComponent(target);
+                    }));
+                } else if (upperReplace === '{HEX}') {
+                    tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
+                        let str = '';
+                        for (let i = 0; i < target.length; i += 2) {
+                            str += String.fromCharCode(parseInt(target.substr(i, 2), 16));
+                        }
+                        return str;
+                    }));
+                } else if (upperReplace === '{REVERSE}') {
+                    tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
+                        return target.split('').reverse().join('');
+                    }));
+                } else if (upperReplace === '{ROT13}') {
+                    tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
+                        return target.replace(/[a-zA-Z]/g, c => String.fromCharCode((c <= 'Z' ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26));
+                    }));
                 } else {
+                    // 默认替换模式 (保持不变)
                     if (!rule.useRegexReplace) replaceText = replaceText.replace(/\$/g, '$$$$');
                     tempUrl = tempUrl.replace(rule._findRegex, replaceText);
                 }
@@ -321,7 +362,7 @@ function openSettings() {
         #decloak-help-grid {
             display: grid !important;
             grid-template-columns: 100px 1fr !important; /* 左列100px 右列自动填充 */
-            gap: 10px 15px !important; /* 行间距10px 列间距15px */
+            gap: 8px 15px !important; /* 行间距10px 列间距15px */
             align-items: center !important;
         }
 
@@ -583,15 +624,27 @@ function openSettings() {
                 <div class="decloak-help-col-header">变量</div>
                 <div class="decloak-help-col-header">说明</div>
 
-                <!-- 第一行 -->
+                <!-- URL -->
                 <div class="decloak-help-key">{URL}</div>
                 <div class="decloak-help-desc">URL解码</div>
 
-                <!-- 第二行 -->
+                <!-- HEX -->
+                <div class="decloak-help-key">{HEX}</div>
+                <div class="decloak-help-desc">十六进制解码</div>
+
+                <!-- ROT13 -->
+                <div class="decloak-help-key">{ROT13}</div>
+                <div class="decloak-help-desc">ROT13解码</div>
+
+                <!-- BASE64 -->
                 <div class="decloak-help-key">{BASE64}</div>
                 <div class="decloak-help-desc">BASE64解码</div>
 
-                <!-- 第三行 -->
+                <!-- REVERSE -->
+                <div class="decloak-help-key">{REVERSE}</div>
+                <div class="decloak-help-desc">字符串反转</div>
+
+                <!-- 删除 -->
                 <div class="decloak-help-key" style="color: #aaa !important; cursor: default !important; text-decoration: none !important;">替换留空</div>
                 <div class="decloak-help-desc">删除查找的字符</div>
 
