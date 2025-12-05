@@ -11,7 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.4
+// @version      1.6
 // @author       wOxxOm & Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -235,7 +235,7 @@ function openSettings() {
             position: relative !important;
             margin-bottom: 10px !important;
             height: 30px !important;
-            padding: 0 6px !important;
+            padding: 0 14px 0 6px !important;
             flex-shrink: 0 !important;
         }
 
@@ -290,14 +290,14 @@ function openSettings() {
         /* 修改：帮助窗口 (独立居中 无遮罩) */
         #decloak-help-window {
             display: none !important;
-            position: fixed !important; /* 固定定位 */
+            position: fixed !important;
             top: 50% !important; left: 50% !important;
-            transform: translate(-50%, -50%) !important; /* 绝对居中 */
-            width: 300px !important;
-            background: rgb(55, 55, 55) !important; /* 比主背景稍亮 */
+            transform: translate(-50%, -50%) !important;
+            width: 320px !important; /* 稍微加宽 */
+            background: rgb(55, 55, 55) !important;
             border: 1px solid rgb(100, 100, 100) !important;
-            box-shadow: 0 15px 40px rgba(0,0,0,0.8) !important; /* 强阴影 */
-            z-index: 2147483647 !important; /* 最顶层 */
+            box-shadow: 0 15px 40px rgba(0,0,0,0.8) !important;
+            z-index: 2147483647 !important;
             flex-direction: column !important;
             padding: 15px !important;
             pointer-events: auto !important;
@@ -305,7 +305,9 @@ function openSettings() {
 
         .decloak-help-header {
             display: flex !important; justify-content: space-between !important; align-items: center !important;
-            margin-bottom: 15px !important; border-bottom: 1px solid #666 !important; padding-bottom: 5px !important;
+            margin-bottom: 15px !important;
+            /* 移除底边框 改由网格标题承担 */
+            /* border-bottom: 1px solid #666 !important; padding-bottom: 5px !important; */
         }
         .decloak-help-title { color: #fff !important; font-size: 14px !important; }
 
@@ -315,27 +317,41 @@ function openSettings() {
         }
         #decloak-help-window-close:hover { color: #fff !important; }
 
-        .decloak-help-row {
-            display: flex !important; width: 100% !important; margin-bottom: 10px !important;
-            font-size: 13px !important; color: #eee !important; align-items: center !important;
-        }
-        .decloak-help-key {
-            color: rgb(178, 139, 247) !important;
-            width: 80px !important;
-            flex-shrink: 0 !important;
-            user-select: none !important; /* 防止双击选中 改为点击复制 */
-            cursor: pointer !important;   /* 显示手型 */
-            transition: color 0.2s !important;
-        }
-        .decloak-help-key:hover {
-            color: #fff !important;       /* 悬停变白 */
-            text-decoration: underline !important;
-        }
-        .decloak-help-key:active {
-            transform: scale(0.98) !important; /* 点击微缩效果 */
+        /* 新增：网格布局容器 */
+        #decloak-help-grid {
+            display: grid !important;
+            grid-template-columns: 100px 1fr !important; /* 左列100px 右列自动填充 */
+            gap: 10px 15px !important; /* 行间距10px 列间距15px */
+            align-items: center !important;
         }
 
-        .decloak-help-desc { color: #ccc !important; user-select: text !important; }
+        /* 新增：列标题样式 */
+        .decloak-help-col-header {
+            color: #999 !important;
+            font-size: 12px !important;
+            border-bottom: 1px solid #666 !important;
+            padding-bottom: 8px !important;
+            margin-bottom: 5px !important;
+        }
+
+        .decloak-help-key {
+            color: rgb(178, 139, 247) !important;
+            user-select: none !important;
+            cursor: pointer !important;
+            transition: color 0.2s !important;
+            font-size: 13px !important;
+        }
+        .decloak-help-key:active {
+            transform: scale(0.98) !important;
+        }
+
+        /* 修改：描述样式 */
+        .decloak-help-desc {
+            color: #ccc !important;
+            user-select: text !important;
+            font-size: 13px !important;
+            line-height: 1.4 !important;
+        }
 
         /* 搜索框样式 */
         #decloak-search-input {
@@ -357,14 +373,14 @@ function openSettings() {
         }
 
         .decloak-table-header {
-            display: flex !important; gap: 5px !important; padding: 0 5px 5px 5px !important;
+            display: flex !important; gap: 5px !important; padding: 0 13px 5px 5px !important;
             font-size: 12px !important; color: #ccc !important;
             border-bottom: 1px solid #555 !important; margin-bottom: 0 !important;
             flex-shrink: 0 !important;
         }
         .decloak-rules-container {
             flex: 1 !important;
-            overflow-y: auto !important;
+            overflow-y: scroll !important;
             margin-bottom: 10px !important;
             border: 1px solid #555 !important;
             border-top: none !important;
@@ -425,7 +441,7 @@ function openSettings() {
         .rule-find { color: rgb(246, 182, 78) !important; }
         .rule-replace { color: rgb(178, 139, 247) !important; }
 
-        /* 按钮通用样式 - 深色版 */
+        /* 按钮通用样式 */
         .decloak-btn {
             padding: 0 !important;
             cursor: pointer !important;
@@ -451,7 +467,7 @@ function openSettings() {
             border-color: rgb(118, 202, 83) !important;
         }
         .decloak-btn-toggle { margin-right: 0 !important; }
-        /* 删除按钮 - 深色版 */
+        /* 删除按钮 */
         .decloak-btn-danger {
             background: #333 !important;
             color: #ff6b6b !important;
@@ -558,20 +574,29 @@ function openSettings() {
         <!-- 修改：独立的帮助窗口 -->
         <div id="decloak-help-window">
             <div class="decloak-help-header">
-                <span class="decloak-help-title">变量说明</span>
+                <span class="decloak-help-title">帮助</span>
                 <button id="decloak-help-window-close">&times;</button>
             </div>
-            <div class="decloak-help-row">
+
+            <div id="decloak-help-grid">
+                <!-- 列标题 -->
+                <div class="decloak-help-col-header">变量</div>
+                <div class="decloak-help-col-header">说明</div>
+
+                <!-- 第一行 -->
                 <div class="decloak-help-key">{URL}</div>
                 <div class="decloak-help-desc">URL解码</div>
-            </div>
-            <div class="decloak-help-row">
+
+                <!-- 第二行 -->
                 <div class="decloak-help-key">{BASE64}</div>
-                <div class="decloak-help-desc">BASE64解码 (UTF-8)</div>
-            </div>
-            <div class="decloak-help-row">
-                <div class="decloak-help-key">替换留空</div>
-                <div class="decloak-help-desc">表示删除查找的内容</div>
+                <div class="decloak-help-desc">BASE64解码</div>
+
+                <!-- 第三行 -->
+                <div class="decloak-help-key" style="color: #aaa !important; cursor: default !important; text-decoration: none !important;">替换留空</div>
+                <div class="decloak-help-desc">删除查找的字符</div>
+
+                <div class="decloak-help-key" style="color: #aaa !important; cursor: default !important; text-decoration: none !important;">查找和替换留空</div>
+                <div class="decloak-help-desc">不执行默认规则</div>
             </div>
         </div>
     `;

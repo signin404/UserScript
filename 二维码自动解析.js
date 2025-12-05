@@ -10,7 +10,7 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @run-at       document-start
-// @version      2.6
+// @version      2.7
 // @author       Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -22,6 +22,7 @@
     const DELAY_MS = 500;
     const TOLERANCE = 2;
     const CROP_TARGET_SIZE = 500; // 框选解析的最大尺寸 (超过此尺寸才缩小)
+    const AUTO_SCAN_MAX_SIZE = 2000; // 超过此尺寸不自动解析
 
     // === ZXing 初始化 ===
     let zxingReaderStrict = null; // 仅用于悬停 (只识二维码)
@@ -414,10 +415,15 @@
 
     // === 统一入口 ===
     function scanElement(target, force = false, cropRect = null) {
+        // 获取当前缓存状态 (用于强制解析时的判断)
+        let prevCache = null;
+        if (target.tagName === 'IMG' && target.src) prevCache = qrCache.get(target.src);
+        else if (target.tagName === 'CANVAS') prevCache = canvasCache.get(target);
+
         if (target.tagName === 'IMG') {
-            scanImage(target, force, cropRect);
+            scanImage(target, force, cropRect, prevCache);
         } else if (target.tagName === 'CANVAS') {
-            scanCanvas(target, force, cropRect);
+            scanCanvas(target, force, cropRect, prevCache);
         }
     }
 
@@ -449,7 +455,7 @@
                         }
                     }
                     if (resultText) {
-                        qrCache.set(src, { text: resultText, method: "远程解析" });
+                        qrCache.set(src, { status: 'success', text: resultText, method: "远程解析" });
                         applyQrSuccess(target, resultText, "远程解析");
                     } else {
                         requestShowTooltip("❌ 远程解析失败", target);
@@ -468,9 +474,11 @@
     //      图像获取与预处理
     // ==========================================
 
-    function scanImage(img, force, cropRect) {
+    function scanImage(img, force, cropRect, prevCache) {
         const src = img.src;
         if (!src) return;
+        // 如果非强制且已有缓存(且非skipped) 则跳过
+        // 注意：如果是 skipped (too_large) force 模式下应该允许继续
         if (!force && !cropRect && qrCache.has(src)) return;
 
         let displayWidth = img.width || img.clientWidth || 0;
@@ -482,7 +490,7 @@
         tempImg.crossOrigin = "Anonymous";
         tempImg.src = src;
 
-        tempImg.onload = () => processImage(tempImg, canvas, context, img, src, force, 'IMG', displayWidth, displayHeight, cropRect);
+        tempImg.onload = () => processImage(tempImg, canvas, context, img, src, force, 'IMG', displayWidth, displayHeight, cropRect, prevCache);
         tempImg.onerror = () => scanImage_Fallback(img, src, force, displayWidth, displayHeight, cropRect);
     }
 
@@ -515,7 +523,7 @@
         });
     }
 
-    function scanCanvas(canvasEl, force, cropRect) {
+    function scanCanvas(canvasEl, force, cropRect, prevCache) {
         if (!force && !cropRect && canvasCache.has(canvasEl)) return;
 
         try {
@@ -567,7 +575,7 @@
                     // 绘制并缩放
                     finalCtx.drawImage(canvasEl, drawX, drawY, drawW, drawH, padding, padding, targetW, targetH);
 
-                    runScanPipeline(finalCanvas, finalCtx, canvasEl, force, 'CANVAS', canvasEl, !!cropRect);
+                    runScanPipeline(finalCanvas, finalCtx, canvasEl, force, 'CANVAS', canvasEl, !!cropRect, prevCache);
                 } catch (e) {
                     canvasCache.set(canvasEl, null);
                 }
@@ -635,7 +643,7 @@
         ctx.drawImage(tempCanvas, 0, 0, curW, curH, targetX, targetY, targetW, targetH);
     }
 
-    function processImage(imageObj, canvas, context, targetEl, cacheKey, force, type, displayWidth, displayHeight, cropRect) {
+    function processImage(imageObj, canvas, context, targetEl, cacheKey, force, type, displayWidth, displayHeight, cropRect, prevCache) {
         // 1. 获取原始尺寸
         let naturalW = imageObj.naturalWidth;
         let naturalH = imageObj.naturalHeight;
@@ -724,38 +732,49 @@
             }
         }
 
-        runScanPipeline(canvas, context, targetEl, force, type, cacheKey, !!cropRect);
+        runScanPipeline(canvas, context, targetEl, force, type, cacheKey, !!cropRect, prevCache);
     }
 
     // ==========================================
     //      核心扫描管道 (JSQR + ZXing)
     // ==========================================
 
-    async function runScanPipeline(canvas, context, targetEl, force, type, cacheKey, isCrop) {
+    async function runScanPipeline(canvas, context, targetEl, force, type, cacheKey, isCrop, prevCache) {
         if (force) requestShowTooltip("⌛ 正在进行强制解析...", targetEl);
 
         let result = null;
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
         const suffix = isCrop ? " 框选" : "";
 
+        // === 智能跳过逻辑 ===
+        // 如果是强制解析 且之前的失败原因是 "standard_failed" (标准解析已尝试过且失败)
+        // 则直接跳过 Phase 1 进入 Phase 2
+        let skipStandard = false;
+        if (force && prevCache && prevCache.status === 'failed' && prevCache.reason === 'standard_failed') {
+            skipStandard = true;
+            requestShowTooltip("⌛ 深度解析...", targetEl);
+        }
+
         // --- 阶段 1: 标准解析 ---
+        if (!skipStandard) {
+            // 1.1 JSQR 标准
+            result = jsQR(imageData.data, imageData.width, imageData.height);
+            if (result) {
+                handleSuccess(result.data, "JSQR" + suffix, type, cacheKey, targetEl);
+                return;
+            }
 
-        // 1.1 JSQR 标准
-        result = jsQR(imageData.data, imageData.width, imageData.height);
-        if (result) {
-            handleSuccess(result.data, "JSQR" + suffix, type, cacheKey, targetEl);
-            return;
+            // 1.2 ZXing 标准
+            result = await tryZXing(canvas, force);
+            if (result) {
+                handleSuccess(result, "ZXing" + suffix, type, cacheKey, targetEl);
+                return;
+            }
         }
 
-        // 1.2 ZXing 标准
-        result = await tryZXing(canvas, force);
-        if (result) {
-            handleSuccess(result, "ZXing" + suffix, type, cacheKey, targetEl);
-            return;
-        }
-
+        // 如果不是强制模式 且标准解析失败 则记录失败原因并退出
         if (!force) {
-            handleFail(type, cacheKey, targetEl, false);
+            handleFail(type, cacheKey, targetEl, false, "standard_failed"); // <--- 记录原因
             return;
         }
 
@@ -819,7 +838,7 @@
             return;
         }
 
-        handleFail(type, cacheKey, targetEl, true);
+        handleFail(type, cacheKey, targetEl, true, "force_failed");
     }
 
     function tryZXing(canvas, isForce) {
@@ -843,16 +862,20 @@
     }
 
     function handleSuccess(text, method, type, cacheKey, targetEl) {
-        const cacheObj = { text: text, method: method };
+        const cacheObj = { status: 'success', text: text, method: method };
+
         if (type === 'IMG') qrCache.set(cacheKey, cacheObj);
         else canvasCache.set(targetEl, cacheObj);
+
         applyQrSuccess(targetEl, text, method);
     }
 
-    function handleFail(type, cacheKey, targetEl, isForce) {
+    function handleFail(type, cacheKey, targetEl, isForce, reason = "unknown") {
         if (!isForce) {
-            if (type === 'IMG') qrCache.set(cacheKey, null);
-            else canvasCache.set(targetEl, null);
+            const failObj = { status: 'failed', reason: reason };
+
+            if (type === 'IMG') qrCache.set(cacheKey, failObj);
+            else canvasCache.set(targetEl, failObj);
         }
 
         if (isForce) {
@@ -914,24 +937,7 @@
         if (!isImg && !isCanvas) return;
         if (isImg && (!target.complete || target.naturalWidth === 0)) return;
 
-        // 检查缓存
-        if (isImg && target.src && qrCache.has(target.src)) {
-            const cacheData = qrCache.get(target.src);
-            if (cacheData) {
-                if (!target.dataset.hasQr) applyQrSuccess(target, cacheData.text, cacheData.method);
-                else requestShowTooltip(cacheData.text, target, cacheData.method);
-            }
-            return;
-        }
-        if (isCanvas && canvasCache.has(target)) {
-            const cacheData = canvasCache.get(target);
-            if (cacheData) {
-                if (!target.dataset.hasQr) applyQrSuccess(target, cacheData.text, cacheData.method);
-                else requestShowTooltip(cacheData.text, target, cacheData.method);
-            }
-            return;
-        }
-
+        // --- 1. 获取尺寸 ---
         let w, h;
         if (isImg) {
             w = target.naturalWidth;
@@ -941,14 +947,40 @@
             h = target.height || target.clientHeight;
         }
 
+        // --- 2. 检查缓存 ---
+        let cacheData = null;
+        if (isImg && target.src) cacheData = qrCache.get(target.src);
+        else if (isCanvas) cacheData = canvasCache.get(target);
+
+        if (cacheData) {
+            // 如果是成功状态 显示结果
+            if (cacheData.status === 'success') {
+                if (!target.dataset.hasQr) applyQrSuccess(target, cacheData.text, cacheData.method);
+                else requestShowTooltip(cacheData.text, target, cacheData.method);
+            }
+            // 如果是失败或跳过状态 直接返回 不再重复尝试
+            return;
+        }
+
+        // --- 3. 尺寸检查 (新增逻辑) ---
+        // 如果尺寸超过 2000 且没有缓存 则标记为因过大而跳过
+        if (w > AUTO_SCAN_MAX_SIZE || h > AUTO_SCAN_MAX_SIZE) {
+            const skipObj = { status: 'skipped', reason: 'too_large' };
+            if (isImg && target.src) qrCache.set(target.src, skipObj);
+            else if (isCanvas) canvasCache.set(target, skipObj);
+            return; // 停止自动解析
+        }
+
         if (Math.abs(w - h) > TOLERANCE || w < 30) {
-            if (isImg && target.src) qrCache.set(target.src, null);
-            else if (isCanvas) canvasCache.set(target, null);
+            const failObj = { status: 'failed', reason: 'invalid_size' };
+            if (isImg && target.src) qrCache.set(target.src, failObj);
+            else if (isCanvas) canvasCache.set(target, failObj);
             return;
         }
 
         hoverTimer = setTimeout(() => {
             if (isCropping) return;
+            // 再次检查缓存防止并发
             if (isImg && qrCache.has(target.src)) return;
             if (isCanvas && canvasCache.has(target)) return;
             scanElement(target, false);
@@ -1041,12 +1073,14 @@
         const target = e.target;
         if ((target.tagName === 'IMG' || target.tagName === 'CANVAS') && target.dataset.hasQr === "true") {
             let data = null;
-            if (target.tagName === 'IMG') {
-                const c = qrCache.get(target.src);
-                if (c) data = c.text;
-            } else {
-                const c = canvasCache.get(target);
-                if (c) data = c.text;
+            let cacheData = null;
+
+            if (target.tagName === 'IMG') cacheData = qrCache.get(target.src);
+            else cacheData = canvasCache.get(target);
+
+            // 检查 status === 'success'
+            if (cacheData && cacheData.status === 'success') {
+                data = cacheData.text;
             }
 
             if (data) {
