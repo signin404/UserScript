@@ -538,6 +538,11 @@ function openSettings() {
             color: #ccc !important;
             border: 1px solid #555 !important;
             flex-shrink: 0 !important;
+            width: auto !important;
+            flex: 1 !important;
+            margin-bottom: 0 !important;
+            height: 30px !important;
+            border-right: none !important;
         }
         #decloak-add-rule:hover {
             background: #3a3a3a !important;
@@ -548,8 +553,20 @@ function openSettings() {
         .decloak-footer {
             display: flex !important;
             justify-content: flex-end !important;
-            gap: 10px !important;
+            gap: 0 !important;
+            padding: 4px 0px !important;
             flex-shrink: 0 !important;
+        }
+
+        /* 保存按钮样式 */
+        #decloak-save {
+            width: 71px !important;
+            height: 30px !important;
+            padding: 0 !important;
+            font-size: 12px !important;
+            border-left: 1px solid #555 !important;
+            white-space: nowrap !important;
+            border: 1px solid #555 !important;
         }
 
         /* 输入框组合样式 */
@@ -608,9 +625,11 @@ function openSettings() {
             <div class="decloak-rules-container" id="decloak-rules-list">
                 <!-- Rules will be injected here -->
             </div>
-            <button id="decloak-add-rule" class="decloak-btn" style="width: 100% !important; margin-bottom: 10px !important; height: 30px !important;">+ 添加规则</button>
+
             <div class="decloak-footer">
-                <button id="decloak-save" class="decloak-btn decloak-btn-primary">保存并关闭</button>
+                <button id="decloak-add-rule" class="decloak-btn">+ 添加规则</button>
+                <button id="decloak-save" class="decloak-btn decloak-btn-primary">保存</button>
+            </div>
 
         <!-- 修改：独立的帮助窗口 -->
         <div id="decloak-help-window">
