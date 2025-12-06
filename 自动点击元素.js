@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_addValueChangeListener
-// @version      1.7
+// @version      1.8
 // @author       Max & Gemini
 // @license      MPL2.0
 // ==/UserScript==
@@ -285,8 +285,8 @@ class WebElementHandler {
         menu.style.border = '1px solid rgb(80, 80, 80)';
         menu.style.padding = '10px';
         menu.style.zIndex = '2147483647';
-        menu.style.maxWidth = '400px';
-        menu.style.minWidth = '230px';
+        menu.style.width = '260px';
+        menu.style.boxSizing = 'border-box';
         menu.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
         menu.innerHTML = `
             <style>
@@ -380,10 +380,19 @@ class WebElementHandler {
                     min-width: auto !important;
                     padding: 5px 10px;
                     margin: 0;
+                    border: none !important;
+                    background: transparent;
                 }
                 #autoClickMenu button[id^="updateRule"],
                 #autoClickMenu button[id^="deleteRule"] {
                     border-radius: 0;
+                }
+                /* 分割线样式 */
+                #autoClickMenu .separator {
+                    width: 100%;
+                    height: 1px;
+                    background-color: rgb(204, 204, 204);
+                    margin: 10px 0;
                 }
             </style>
                 <div id="autoClickMenu">
@@ -392,7 +401,7 @@ class WebElementHandler {
                         <button id="closeMenu" class="closeButton">✕</button>
                     </div>
                     <div id="rulesList"></div>
-                    ――――――――――――――――――――――――――――――――――――――
+                    <div class="separator"></div>
                     <h4>${i18n.addRuleSection}</h4>
                     <label>${i18n.ruleName}</label>
                     <input type="text" id="ruleName" placeholder="${i18n.ruleNamePlaceholder}">
