@@ -47,7 +47,6 @@
         try {
             window.open(url, '_blank');
         } catch (e) {
-            console.error('打开新标签页失败:', e);
         }
 
         // --- 3. 清理工作 ---
@@ -56,9 +55,9 @@
             // 注意：这里注释掉了 revokeObjectURL
             // 因为如果立即释放 URL 新打开的标签页可能还没加载完视频数据就失效了
             // 让浏览器在页面关闭时自动回收 或者设置一个很长的超时时间（例如 1 分钟）
-            // window.URL.revokeObjectURL(url); 
+            // window.URL.revokeObjectURL(url);
         }, 100);
-        
+
         // 可选：设置一个较长的超时来释放内存（例如60秒后）
         // setTimeout(() => {
              // window.URL.revokeObjectURL(url);
