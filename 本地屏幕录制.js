@@ -5,7 +5,7 @@
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
 // @run-at       document-idle
-// @version      1.0
+// @version      1.1
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PGNpcmNsZSBjeD0iMTgiIGN5PSIxOCIgcj0iMTgiIGZpbGw9IiNERDJFNDQiLz48L3N2Zz4=
@@ -31,6 +31,8 @@
             type: 'video/webm'
         });
         const url = URL.createObjectURL(blob);
+
+        // --- 1. 触发下载 ---
         const a = document.createElement('a');
         a.style.display = 'none';
         a.href = url;
@@ -38,13 +40,29 @@
         a.download = `screen-recording-${new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-')}.webm`;
         document.body.appendChild(a);
         a.click();
-
         console.log('视频下载已触发');
 
+        // --- 2. 打开新标签页播放 ---
+        // 注意：浏览器可能会拦截非用户直接点击触发的弹窗 请留意地址栏拦截提示
+        try {
+            window.open(url, '_blank');
+        } catch (e) {
+            console.error('打开新标签页失败:', e);
+        }
+
+        // --- 3. 清理工作 ---
         setTimeout(() => {
             document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            // 注意：这里注释掉了 revokeObjectURL
+            // 因为如果立即释放 URL 新打开的标签页可能还没加载完视频数据就失效了
+            // 让浏览器在页面关闭时自动回收 或者设置一个很长的超时时间（例如 1 分钟）
+            // window.URL.revokeObjectURL(url); 
         }, 100);
+        
+        // 可选：设置一个较长的超时来释放内存（例如60秒后）
+        // setTimeout(() => {
+             // window.URL.revokeObjectURL(url);
+        // }, 60000);
     }
 
     /**
@@ -64,8 +82,8 @@
      */
     async function startRecording() {
         if (mediaRecorder && mediaRecorder.state === 'recording') {
-            console.warn('已经有一个录制任务在进行中');
-            alert('已经有一个录制任务在进行中'); // 使用alert作为强提醒
+            console.warn('已经有录制任务在进行中');
+            alert('已经有录制任务在进行中'); // 使用alert作为强提醒
             return;
         }
 
@@ -108,6 +126,7 @@
 
         } catch (err) {
             if (err.name === 'NotAllowedError') {
+                // 用户取消了选择
             } else {
                 console.error("录制错误:", err);
             }
@@ -115,7 +134,6 @@
     }
 
     // --- 注册Tampermonkey菜单命令 ---
-    // 只注册“开始录制”这一个命令
     GM_registerMenuCommand('开始录制', startRecording);
 
 })();
