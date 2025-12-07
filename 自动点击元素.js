@@ -320,6 +320,7 @@ class WebElementHandler {
                     box-sizing: border-box !important;
                     height: 29px;
                     font-size: 9px;
+                    text-align: center !important;
                 }
                 #autoClickMenu h3, #autoClickMenu h4, #autoClickMenu p, #autoClickMenu label {
                     font-size: 9px;
@@ -363,6 +364,7 @@ class WebElementHandler {
                     margin: 5px 0;
                     border-radius: 0px;
                     border: 1px solid rgb(80, 80, 80);
+                    text-align: center;
                 }
                 #autoClickMenu .readRule {
                     padding: 5px;

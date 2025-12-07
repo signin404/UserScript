@@ -9,7 +9,7 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-start
-// @version      1.0
+// @version      1.1
 // @author       Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -17,97 +17,133 @@
 (function() {
     'use strict';
 
+    // 性能优化：全局缓存变量
     // ==========================================
-    // 核心逻辑：规则处理函数
+    let cachedRules = [];
+    const textDecoder = new TextDecoder('utf-8');
+
+    // ==========================================
+    // 核心逻辑：规则预处理 (构建缓存)
+    // ==========================================
+    function refreshRulesCache() {
+        const rawRules = GM_getValue('cf_rules', []);
+        cachedRules = rawRules
+            .filter(r => r.enabled !== false && r.find) // 过滤掉禁用的和无效的
+            .map(rule => {
+                // 1. 预编译 URL 匹配正则
+                let siteRegex = null;
+                let siteString = null;
+                if (rule.match && rule.match.trim() !== "") {
+                    if (rule.useRegexMatch) {
+                        try { siteRegex = new RegExp(rule.match); } catch (e) { console.error('Invalid Site Regex', e); }
+                    } else {
+                        siteString = rule.match;
+                    }
+                }
+
+                // 2. 预编译 查找 正则
+                let findRegex = null;
+                try {
+                    if (rule.useRegexFind) {
+                        findRegex = new RegExp(rule.find, 'g');
+                    } else {
+                        // 自动转义特殊字符
+                        const escapedFind = rule.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        findRegex = new RegExp(escapedFind, 'g');
+                    }
+                } catch (e) {
+                    console.error('Invalid Find Regex', e);
+                    return null; // 规则无效 跳过
+                }
+
+                // 3. 预处理替换逻辑 (闭包优化)
+                let replaceHandler = null;
+                const replaceText = rule.replace || "";
+                const upperReplace = replaceText.toUpperCase();
+
+                if (upperReplace === '{BASE64}') {
+                    replaceHandler = (match, ...args) => {
+                        const target = (args.length > 2 && args[0] !== undefined) ? args[0] : match;
+                        try {
+                            let base64 = target.replace(/[^A-Za-z0-9+/=_-]/g, '').replace(/-/g, '+').replace(/_/g, '/');
+                            while (base64.length % 4) base64 += '=';
+                            const binary = atob(base64);
+                            const bytes = new Uint8Array(binary.length);
+                            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                            return textDecoder.decode(bytes);
+                        } catch (e) { return match; }
+                    };
+                } else if (upperReplace === '{URL}') {
+                    replaceHandler = (match, ...args) => {
+                        const target = (args.length > 2 && args[0] !== undefined) ? args[0] : match;
+                        try { return decodeURIComponent(target); } catch(e) { return match; }
+                    };
+                } else if (upperReplace === '{HEX}') {
+                    replaceHandler = (match, ...args) => {
+                        const target = (args.length > 2 && args[0] !== undefined) ? args[0] : match;
+                        try {
+                            const hex = target.replace(/[^0-9a-fA-F]/g, '');
+                            if (hex.length % 2 !== 0) return target;
+                            const bytes = new Uint8Array(hex.length / 2);
+                            for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+                            return textDecoder.decode(bytes);
+                        } catch(e) { return match; }
+                    };
+                } else if (upperReplace === '{REVERSE}') {
+                    replaceHandler = (match, ...args) => {
+                        const target = (args.length > 2 && args[0] !== undefined) ? args[0] : match;
+                        return [...target].reverse().join('');
+                    };
+                } else if (upperReplace === '{ROT13}') {
+                    replaceHandler = (match, ...args) => {
+                        const target = (args.length > 2 && args[0] !== undefined) ? args[0] : match;
+                        return target.replace(/[a-zA-Z]/g, c => String.fromCharCode((c <= 'Z' ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26));
+                    };
+                } else {
+                    // 普通文本替换 处理 $ 符号
+                    const finalReplaceText = rule.useRegexReplace ? replaceText : replaceText.replace(/\$/g, '$$$$');
+                    // 如果不是特殊变量 直接存字符串即可 不需要函数
+                    replaceHandler = finalReplaceText;
+                }
+
+                return {
+                    siteRegex,
+                    siteString,
+                    findRegex,
+                    replaceHandler
+                };
+            })
+            .filter(r => r !== null); // 过滤掉编译失败的规则
+    }
+
+    // 初始化时加载一次
+    refreshRulesCache();
+
+    // ==========================================
+    // 核心逻辑：规则处理函数 (优化版)
     // ==========================================
 
     function applyRulesToText(text) {
         if (!text) return text;
 
-        const rules = getEnabledRules();
         let processedText = text;
         const currentUrl = window.location.href;
 
-        for (const rule of rules) {
-            // 1. 检查生效网站 (Match)
-            if (rule.match && rule.match.trim() !== "") {
-                let isSiteMatch = false;
-                if (rule.useRegexMatch) {
-                    try { if (new RegExp(rule.match).test(currentUrl)) isSiteMatch = true; } catch (err) {}
-                } else {
-                    if (currentUrl.includes(rule.match)) isSiteMatch = true;
-                }
-                if (!isSiteMatch) continue;
+        // 直接遍历内存中的预编译规则
+        for (const rule of cachedRules) {
+            // 1. 快速检查生效网站
+            if (rule.siteRegex) {
+                if (!rule.siteRegex.test(currentUrl)) continue;
+            } else if (rule.siteString) {
+                if (!currentUrl.includes(rule.siteString)) continue;
             }
 
-            // 2. 准备查找正则 (Find)
-            if (!rule.find) continue;
-            let findRegex;
-            try {
-                if (rule.useRegexFind) {
-                    findRegex = new RegExp(rule.find, 'g');
-                } else {
-                    const escapedFind = rule.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    findRegex = new RegExp(escapedFind, 'g');
-                }
-            } catch (err) { continue; }
+            // 2. 执行替换
+            // 由于 findRegex 是全局的 (g flag) 且 lastIndex 可能会保留
+            // 建议每次使用前重置 lastIndex 或者因为是 replace 方法调用 JS 引擎会自动处理
+            rule.findRegex.lastIndex = 0;
 
-            // 3. 准备替换内容 & 变量处理
-            let replaceText = rule.replace || "";
-            const upperReplace = replaceText.toUpperCase();
-            let replaceHandler = null;
-
-            // 通用处理函数：带错误捕获
-            const processMatch = (processor) => {
-                return (...args) => {
-                    const match = args[0];
-                    const captures = args.slice(1, -2);
-                    const target = (captures.length > 0 && captures[0] !== undefined) ? captures[0] : match;
-                    try {
-                        return processor(target);
-                    } catch (e) {
-                        return match;
-                    }
-                };
-            };
-
-            // --- 变量处理逻辑 ---
-            if (upperReplace === '{BASE64}') {
-                replaceHandler = processMatch((target) => {
-                    let base64 = target.replace(/[^A-Za-z0-9+/=_-]/g, '').replace(/-/g, '+').replace(/_/g, '/');
-                    while (base64.length % 4) base64 += '=';
-                    const binary = atob(base64);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                    return new TextDecoder('utf-8').decode(bytes);
-                });
-            } else if (upperReplace === '{URL}') {
-                replaceHandler = processMatch((target) => decodeURIComponent(target));
-            } else if (upperReplace === '{HEX}') {
-                replaceHandler = processMatch((target) => {
-                    const hex = target.replace(/[^0-9a-fA-F]/g, '');
-                    if (hex.length % 2 !== 0) return target;
-                    const bytes = new Uint8Array(hex.length / 2);
-                    for (let i = 0; i < hex.length; i += 2) {
-                        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-                    }
-                    return new TextDecoder('utf-8').decode(bytes);
-                });
-            } else if (upperReplace === '{REVERSE}') {
-                replaceHandler = processMatch((target) => [...target].reverse().join(''));
-            } else if (upperReplace === '{ROT13}') {
-                replaceHandler = processMatch((target) => {
-                    return target.replace(/[a-zA-Z]/g, c => String.fromCharCode((c <= 'Z' ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26));
-                });
-            } else {
-                if (!rule.useRegexReplace) {
-                    replaceText = replaceText.replace(/\$/g, '$$$$');
-                }
-            }
-
-            // 4. 执行替换
-            const finalReplacement = replaceHandler ? replaceHandler : replaceText;
-            processedText = processedText.replace(findRegex, finalReplacement);
+            processedText = processedText.replace(rule.findRegex, rule.replaceHandler);
         }
 
         return processedText;
@@ -148,8 +184,26 @@
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
 
-        let plainText = selection.toString();
+        // 1. 先只获取纯文本（开销极小）
+        const plainText = selection.toString();
+        if (!plainText) return;
+
+        // 2. 尝试对纯文本应用规则
+        const processedPlainText = applyRulesToText(plainText);
+
+        // 3. 关键判断：如果纯文本没有变化 说明没有规则命中（或者规则不改变内容）
+        // 此时直接 return 不调用 preventDefault()
+        // 浏览器会执行默认复制 自动处理好纯文本和 HTML 性能最高 且保留原格式
+        if (processedPlainText === plainText) {
+            return;
+        }
+
+        // ============================================================
+        // 只有当内容确实需要修改时 我们才被迫付出性能代价去处理 HTML
+        // ============================================================
+
         let htmlText = "";
+        // 只有当剪贴板支持 HTML 时才去提取
         if (e.clipboardData) {
             const container = document.createElement('div');
             for (let i = 0; i < selection.rangeCount; i++) {
@@ -158,19 +212,20 @@
             htmlText = container.innerHTML;
         }
 
-        if (!plainText && !htmlText) return;
-
-        // 使用提取出的公共函数处理
-        const processedPlainText = applyRulesToText(plainText);
+        // 处理 HTML
         const processedHtmlText = applyRulesToText(htmlText);
 
-        // 如果内容有变化 则阻止默认行为并写入新内容
-        if (processedPlainText !== plainText || processedHtmlText !== htmlText) {
-            e.preventDefault();
-            if (processedPlainText) e.clipboardData.setData('text/plain', processedPlainText);
-            if (processedHtmlText) e.clipboardData.setData('text/html', processedHtmlText);
-            e.stopImmediatePropagation();
+        // 写入剪贴板
+        e.preventDefault();
+        e.clipboardData.setData('text/plain', processedPlainText);
+
+        // 如果原本有 HTML 处理后也要写回去 否则格式会丢失
+        if (htmlText) {
+            e.clipboardData.setData('text/html', processedHtmlText);
         }
+
+        // 阻止冒泡
+        e.stopImmediatePropagation();
     }, true);
 
     // ==========================================
@@ -182,7 +237,7 @@
     GM_registerMenuCommand("设置面板", openSettings);
 
     function getRules() {
-        return GM_getValue('cf_rules', DEFAULT_RULES);
+        return GM_getValue('cf_rules', []); // 仅用于设置界面读取
     }
 
     function getEnabledRules() {
@@ -191,6 +246,7 @@
 
     function saveRules(rules) {
         GM_setValue('cf_rules', rules);
+        refreshRulesCache(); // 保存后立即刷新内存缓存
     }
 
     // ==========================================
