@@ -143,8 +143,8 @@
       .${mainClassName} .cookieTable th { font-size: 13px; white-space: nowrap; background-color: #e9e9e9 !important; }
 
       /* 固定交错行背景色 */
-      .${mainClassName} .cookieTable tbody tr:nth-child(odd) { background-color: #f9f9f9 !important; }
-      .${mainClassName} .cookieTable tbody tr:nth-child(even) { background-color: #ffffff !important; }
+      .${mainClassName} .cookieTable tbody tr:nth-child(odd) { background-color: #ffffff !important; }
+      .${mainClassName} .cookieTable tbody tr:nth-child(even) { background-color: #f9f9f9 !important; }
       .${mainClassName} .cookieTable tbody tr:hover { background-color: #f1f1f1 !important; }
 
       .${mainClassName} .cookieTable td.cookie-name { text-align: left; }
