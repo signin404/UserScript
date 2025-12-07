@@ -11,7 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      1.7
+// @version      1.8
 // @author       wOxxOm & Gemini
 // @license      GPLv3
 // ==/UserScript==
@@ -85,16 +85,16 @@ function applyCustomRules(a) {
         const cachedResult = urlCache.get(originalUrl);
         if (cachedResult === null) return false;
 
-        if (cachedResult !== originalUrl) {
-            a.hrefUndecloaked = originalUrl;
-            a.href = cachedResult;
-            // 对于非 HTTP 协议 rel 属性可能不重要 但保留也无妨
+        if (cachedResult.url !== originalUrl) {
+            a.href = cachedResult.url;
             a.rel = 'external noreferrer nofollow noopener';
+            if (cachedResult.replaced) {
+                a.hrefUndecloaked = originalUrl;
+            }
         }
         return true;
     }
 
-    // 获取 hostname 对于 magnet 等协议 hostname 可能是空字符串
     const hostname = a.hostname || "";
 
     // 2. 筛选阶段
@@ -106,16 +106,7 @@ function applyCustomRules(a) {
         if (rule.useRegexMatch) {
             if (rule._matchRegex) isMatch = rule._matchRegex.test(originalUrl);
         } else {
-            // 如果是普通匹配 且 hostname 为空（非HTTP协议）
-            // 建议用户使用正则匹配但如果用户非要用普通匹配匹配 magnet 协议头
-            // 可以改为检查完整 URL 是否包含字符串
-            if (rule.match) {
-                // 修改建议：为了兼容 magnet 如果 hostname 为空 则检查完整 URL
-                // 或者保持原样（只匹配域名）
-                // 这里保持原样逻辑：非正则模式下只匹配 hostname
-                // 如果用户想匹配 magnet 推荐开启正则模式使用 ^magnet:
-                if (hostname.includes(rule.match)) isMatch = true;
-            }
+            if (rule.match && hostname.includes(rule.match)) isMatch = true;
         }
 
         if (isMatch) {
@@ -130,47 +121,46 @@ function applyCustomRules(a) {
 
     // 3. 执行阶段
     let currentUrl = originalUrl;
-    let hasChanged = false;
+    let hasRuleReplacement = false;
 
     for (const rule of applicableRules) {
         try {
             let tempUrl = currentUrl;
+            let urlBeforeRule = tempUrl;
 
             if (rule._findRegex) {
                 let replaceText = rule.replace || "";
                 const upperReplace = replaceText.toUpperCase();
 
-                // 定义通用处理函数：支持捕获组
-                // 逻辑优化：
-                // 1. 如果没有捕获组 处理整个 match
-                // 2. 如果有捕获组 且第一个组匹配到了内容 处理第一个组
-                // 3. 如果有捕获组 但第一个组是 undefined (例如 (a)|b 匹配了 b) 处理整个 match
+                // 通用处理函数
                 const processMatch = (processor) => {
                     return (...args) => {
                         const match = args[0];
-                        const captures = args.slice(1, -2); // 提取所有捕获组
-
-                        // 智能判断目标
+                        const captures = args.slice(1, -2);
                         const target = (captures.length > 0 && captures[0] !== undefined)
                                        ? captures[0]
                                        : match;
-
                         try {
                             return processor(target);
                         } catch (e) {
-                            return match; // 失败返回原匹配串
+                            // 解码失败时返回原字符串 避免破坏链接
+                            return match;
                         }
                     };
                 };
 
-                // --- 特殊解码处理 ---
+                // --- 变量处理逻辑 ---
                 if (upperReplace === '{BASE64}') {
                     tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
-                        // 1. 预处理
-                        let base64 = target.replace(/\s/g, '').replace(/-/g, '+').replace(/_/g, '/');
+                        // 1. 清理非 Base64 字符 (容错) 并处理 URL 安全字符
+                        let base64 = target.replace(/[^A-Za-z0-9+/=_-]/g, '')
+                                           .replace(/-/g, '+')
+                                           .replace(/_/g, '/');
+                        // 2. 补全 Padding
                         while (base64.length % 4) base64 += '=';
-                        // 2. 解码
+                        // 3. 解码为二进制字符串
                         const binary = atob(base64);
+                        // 4. 转换为字节数组并用 UTF-8 解码
                         const bytes = new Uint8Array(binary.length);
                         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
                         return new TextDecoder('utf-8').decode(bytes);
@@ -180,25 +170,38 @@ function applyCustomRules(a) {
                         return decodeURIComponent(target);
                     }));
                 } else if (upperReplace === '{HEX}') {
+                    // --- 修复：支持 UTF-8 的 Hex 解码 ---
                     tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
-                        let str = '';
-                        for (let i = 0; i < target.length; i += 2) {
-                            str += String.fromCharCode(parseInt(target.substr(i, 2), 16));
+                        // 1. 清理非 Hex 字符 (如空格)
+                        const hex = target.replace(/[^0-9a-fA-F]/g, '');
+                        if (hex.length % 2 !== 0) return target; // 长度不对则不处理
+
+                        // 2. 转换为字节数组
+                        const bytes = new Uint8Array(hex.length / 2);
+                        for (let i = 0; i < hex.length; i += 2) {
+                            bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
                         }
-                        return str;
+                        // 3. UTF-8 解码
+                        return new TextDecoder('utf-8').decode(bytes);
                     }));
                 } else if (upperReplace === '{REVERSE}') {
+                    // --- 修复：支持 Emoji 和代理对的反转 ---
                     tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
-                        return target.split('').reverse().join('');
+                        return [...target].reverse().join('');
                     }));
                 } else if (upperReplace === '{ROT13}') {
                     tempUrl = tempUrl.replace(rule._findRegex, processMatch((target) => {
+                        // ROT13 仅针对 ASCII 字母 无需 UTF-8 处理
                         return target.replace(/[a-zA-Z]/g, c => String.fromCharCode((c <= 'Z' ? 90 : 122) >= (c = c.charCodeAt(0) + 13) ? c : c - 26));
                     }));
                 } else {
-                    // 默认替换模式 (保持不变)
+                    // 默认替换
                     if (!rule.useRegexReplace) replaceText = replaceText.replace(/\$/g, '$$$$');
                     tempUrl = tempUrl.replace(rule._findRegex, replaceText);
+                }
+
+                if (tempUrl !== urlBeforeRule) {
+                    hasRuleReplacement = true;
                 }
             }
 
@@ -206,19 +209,20 @@ function applyCustomRules(a) {
 
             if (tempUrl !== currentUrl) {
                 currentUrl = tempUrl;
-                hasChanged = true;
             }
         } catch (e) {
         }
     }
 
     // 4. 结果处理
-    urlCache.set(originalUrl, currentUrl);
+    urlCache.set(originalUrl, { url: currentUrl, replaced: hasRuleReplacement });
 
-    if (hasChanged) {
-        a.hrefUndecloaked = originalUrl;
+    if (currentUrl !== originalUrl) {
         a.href = currentUrl;
         a.rel = 'external noreferrer nofollow noopener';
+        if (hasRuleReplacement) {
+            a.hrefUndecloaked = originalUrl;
+        }
     }
 
     return true;
@@ -414,7 +418,7 @@ function openSettings() {
         }
 
         .decloak-table-header {
-            display: flex !important; gap: 5px !important; padding: 0 13px 5px 5px !important;
+            display: flex !important; gap: 5px !important; padding: 0 16px 5px 5px !important;
             font-size: 12px !important; color: #ccc !important;
             border-bottom: 1px solid #555 !important; margin-bottom: 0 !important;
             flex-shrink: 0 !important;
@@ -560,7 +564,7 @@ function openSettings() {
 
         /* 保存按钮样式 */
         #decloak-save {
-            width: 71px !important;
+            width: 73px !important;
             height: 30px !important;
             padding: 0 !important;
             font-size: 12px !important;
@@ -574,8 +578,8 @@ function openSettings() {
         .decloak-input-wrapper .decloak-btn { border-left: 1px solid #555 !important; }
 
         /* 滚动条样式 */
-        .decloak-rules-container::-webkit-scrollbar { width: 8px !important; }
-        .decloak-rules-container::-webkit-scrollbar-track { background: #222 !important; }
+        .decloak-rules-container::-webkit-scrollbar { width: 10px !important; }
+        .decloak-rules-container::-webkit-scrollbar-track { background: #222 !important; border-left: 1px solid #444 !important; }
         .decloak-rules-container::-webkit-scrollbar-thumb { background: #555 !important; }
         .decloak-rules-container::-webkit-scrollbar-thumb:hover { background: #777 !important; }
     `);
@@ -702,7 +706,7 @@ function openSettings() {
 
             // 修改：在最左侧添加 toggle 按钮
             row.innerHTML = `
-                <button class="decloak-btn decloak-btn-toggle ${rule.enabled ? 'active' : ''}" title="启用/禁用规则">✔</button>
+                <button class="decloak-btn decloak-btn-toggle ${rule.enabled ? 'active' : ''}" title="启用/禁用">✔</button>
 
                 <div class="decloak-input-group" style="flex: 1.2 !important;">
                     <div class="decloak-input-wrapper">
@@ -827,7 +831,6 @@ function openSettings() {
                     key.innerText = originalText;
                 }, 500);
             }).catch(err => {
-                console.error('复制失败:', err);
             });
         };
     });

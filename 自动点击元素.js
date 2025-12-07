@@ -285,7 +285,7 @@ class WebElementHandler {
         menu.style.border = '1px solid rgb(80, 80, 80)';
         menu.style.padding = '10px';
         menu.style.zIndex = '2147483647';
-        menu.style.width = '260px';
+        menu.style.width = '265px';
         menu.style.boxSizing = 'border-box';
         menu.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
         menu.innerHTML = `
@@ -325,6 +325,7 @@ class WebElementHandler {
                     font-size: 9px;
                     display: block;
                     color: rgb(204, 204, 204);
+                    text-align: center;
                 }
                 #autoClickMenu input[type="checkbox"] {
                     background: rgb(50, 50, 50);
