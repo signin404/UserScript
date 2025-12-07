@@ -321,6 +321,7 @@ class WebElementHandler {
                     height: 29px;
                     font-size: 9px;
                     text-align: center !important;
+                    border-radius: 0 !important;
                 }
                 #autoClickMenu h3, #autoClickMenu h4, #autoClickMenu p, #autoClickMenu label {
                     font-size: 9px;
