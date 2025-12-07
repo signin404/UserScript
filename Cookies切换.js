@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_setClipboard
-// @version      1.0
+// @version      1.1
 // @author       Cheney & Gemini
 // @license      GPLv3
 // @icon      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAAAXNSR0IArs4c6QAAArlJREFUSEullktoE0EYx//ftEKxD2uVFitW8AH25AssKIiCvVQQsaAeeiiKBzWZRMylXmwvnipkZ6OUoniwh6BexMdBPYiIggcVRS1YwQdUbKWRIhLbuJ+d3abNdjfJNlmYw+73+H0z859vllDgYSlbAMQAVJNSxwv5FrORnwNHo/VgvgDmkzn2PlKqt1jCfHYPiKPRLbCsAQBtniDL2kuJxONSYC4Qh0IHIcRVAA2+yZiryDT/lgXiUKgZQjwBsN43EdFLMoztpUB0zNyMWMpLAE5lE70Zz+Dy6z8YaK9zPjGPkGluLAvEUnYAuJebpFaN2a89bdU411btmIgOk2HcLAVmz4ilvALAJV/PjLLZS4QRR6OrYFnvAdQvotIkgM+kVE/QGGIpTwNIBA3I8RsmpVqDxmmQlvOxoAE5fmkIsY7i8e9BYokjkadg3hXE2ccncLfQoHEwrywRpMM8MI7FGqm/35Ht7OMBfZ38Z5ta6ipc7NHfFtpvpbC2tgL3Oz26+QTmb7NHYA+EOEPxeHwhyLV0+vy0NlTiRZe7C32YyGDH0IRdwLvuFcUWYBjMnWSaWs0OnyORa2Duzn7YnZxAzRLhVzVejWXQtFSguUYUA2l7Gun0Ghoc/OmApNSt/3yQyCA+qbSF5VWuQvocUCi0CUK8BVAZJFEhn0O3f+Hhlyl7aRfs8dlsC7oOoKtc0IkHk3g2Oo2hjmXY2jhX9w9MT7c6oHB4P4julgvKE99LSvXNXxORSBLMRwrBFikGneoOKXXA3qPcxCwl5wMtUt46zSgptXpO3i5QOLwZRI9mmqynU0xOMfbdSGFbU+X8ZZivKqLnZBg7XQfWz7csyRPFyDAuLszr+7uVI5CjAPQoJv0MAL3HSTJN103tu3S+s3POmYZtmB3Z/4aPM0dixB6WlaREYriQkP4DhYT2pc+2+CQAAAAASUVORK5CYII=
@@ -64,7 +64,10 @@
     const css = `
       .${mainClassName} {
         position: fixed; z-index: 999999; top: 0; right: 0;
-        width: 1000px; height: 100%; padding: 10px;
+        width: 1000px; height: 100%;
+        padding: 10px;
+        padding-bottom: 10px;
+        box-sizing: border-box;
         transition: transform 200ms; transform: translateX(110%);
         background-color: #fff !important; color: #000 !important;
         box-shadow: -10px 0 10px #ddd; overflow: auto;
@@ -72,19 +75,63 @@
       .${mainClassName} .topWrapper {
         display: flex; justify-content: space-between; align-items: center; margin-bottom:10px;
       }
-      .${mainClassName} .topWrapper span { color: #000 !important; }
+
+      /* --- 修复：固定顶部所有元素的字体大小 --- */
+      .${mainClassName} .topWrapper span,
+      .${mainClassName} .topWrapper select,
+      .${mainClassName} .topWrapper input,
+      .${mainClassName} .topWrapper button {
+        font-size: 13px !important;
+        color: #000 !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        vertical-align: middle !important;
+      }
+
+      /* --- 通用控件样式：去除圆角 统一高度 --- */
       .${mainClassName} select, .${mainClassName} input, .${mainClassName} button {
         background-color: #fff !important;
-        color: #000 !important;
         border: 1px solid #ccc !important;
-        padding: 5px 8px !important;
-        border-radius: 3px !important;
+        padding: 0 8px !important;
+        height: 30px !important;       /* 统一高度 */
+        line-height: 28px !important;  /* 垂直居中 */
+        border-radius: 0 !important;   /* 去除圆角 */
         margin-left: 5px !important;
+        box-sizing: border-box !important;
       }
-      .${mainClassName} select { min-width: 180px; }
-      .${mainClassName} .titleInput { font-size: 14px; outline: none; flex-grow: 1; margin-left:10px !important; }
-      .${mainClassName} .topWrapper button { margin-left: 10px !important; }
-      .${mainClassName} .delete-setting-btn { background-color: #ffdddd !important; border-color: #ffaaaa !important;}
+
+      /* --- 1. 固定已保存COOKIE选择框大小 --- */
+      .${mainClassName} select.title-select {
+        width: 180px !important;
+        min-width: 180px !important;
+        max-width: 180px !important;
+      }
+
+      /* --- 2. 固定删除按钮大小 --- */
+      .${mainClassName} .delete-setting-btn {
+        width: 100px !important;
+        min-width: 100px !important;
+        background-color: #ffdddd !important;
+        border-color: #ffaaaa !important;
+        text-align: center !important;
+        padding: 0 !important;
+      }
+
+      /* --- 3. 固定关闭按钮大小 (位于顶部栏最后的按钮) --- */
+      .${mainClassName} .titleInput { outline: none; flex-grow: 1; margin-left:10px !important; }
+
+      .${mainClassName} .topButtonGroup {
+        display: flex;
+        align-items: center;
+        margin-left: auto;
+      }
+      .${mainClassName} .topButtonGroup button {
+        margin-left: 3px !important;
+        height: 30px !important;
+        line-height: 28px !important;
+        padding: 0 12px !important;
+        white-space: nowrap;
+      }
 
       .${mainClassName} .cookieTable { width: 100%; margin-top: 15px; border-collapse: collapse; }
       .${mainClassName} .cookieTable thead { background-color: #f0f0f0 !important; }
@@ -94,8 +141,12 @@
         color: #000 !important;
       }
       .${mainClassName} .cookieTable th { font-size: 13px; white-space: nowrap; background-color: #e9e9e9 !important; }
+
+      /* 固定交错行背景色 */
       .${mainClassName} .cookieTable tbody tr:nth-child(odd) { background-color: #f9f9f9 !important; }
+      .${mainClassName} .cookieTable tbody tr:nth-child(even) { background-color: #ffffff !important; }
       .${mainClassName} .cookieTable tbody tr:hover { background-color: #f1f1f1 !important; }
+
       .${mainClassName} .cookieTable td.cookie-name { text-align: left; }
       .${mainClassName} .cookieTable td.cookie-value { text-align: left; word-break: break-all; }
       .${mainClassName} .cookieTable textarea {
@@ -114,15 +165,12 @@
         vertical-align: top;
       }
       .${mainClassName} .cookieTable button {
-        word-break: keep-all; padding: 3px 6px !important; font-size:11px !important;
+        word-break: keep-all; padding: 0 6px !important; font-size:11px !important;
+        height: 24px !important; line-height: 22px !important; /* 表格内按钮稍小 */
+        color: #000000 !important;:
       }
-      .${mainClassName} .btnWrapper {
-        display: flex; justify-content: center; margin-top: 20px;
-      }
-      .${mainClassName} .btnWrapper button {
-        margin-left: 15px !important; padding: 8px 20px !important; cursor: pointer;
-        border: 1px solid #ddd;border-radius: 4px;background-color: #fff;&:hover {background-color: #f1f1f1;
-      }
+		/* 右下角按钮咬痕 */
+		background-color: #f1f1f1;
       #cookieBtn {
         background-color: #FF6E6E !important;
       }
@@ -193,7 +241,7 @@
         if (!error) {
           fillTable(cookies);
         } else {
-          $(`.${mainClassName} tbody`).html("<tr><td colspan='10'>无法加载当前Cookie.</td></tr>");
+          $(`.${mainClassName} tbody`).html("<tr><td colspan='10'>无法加载当前Cookie</td></tr>");
         }
       });
     } else { // A saved configuration is selected
@@ -208,26 +256,24 @@
   function handleDeleteCurrentSetting() {
     const titleToDelete = $(`.${mainClassName} .title-select`).val();
     if (!titleToDelete || titleToDelete === LIVE_COOKIES_OPTION_VALUE || !cookiesConfig[domain] || !cookiesConfig[domain].find(s => s.title === titleToDelete)) {
-      alert("没有选中的有效已保存配置可删除");
+      alert("没有有效配置可删除");
       return;
     }
 
-    //if (confirm(`确认删除配置 "${titleToDelete}" 吗？`))
     {
       cookiesConfig[domain] = cookiesConfig[domain].filter(item => item.title !== titleToDelete);
       if (cookiesConfig[domain].length === 0) {
         delete cookiesConfig[domain];
       }
       GM_setValue("cookiesConfig", cookiesConfig);
-      //alert(`配置 "${titleToDelete}" 已删除`);
       refreshSettingsUI(LIVE_COOKIES_OPTION_VALUE); // Refresh and select live cookies
     }
   }
 
   function createMain() {
     const titleSelect = $("<select class='title-select'>");
-    const titleInput = $("<input class='titleInput' placeholder='输入新配置名称或选择现有配置' />");
-    const deleteSettingBtn = $("<button class='delete-setting-btn'>删除此配置</button>")
+    const titleInput = $("<input class='titleInput' placeholder='输入新配置名称' />");
+    const deleteSettingBtn = $("<button class='delete-setting-btn'>删除配置</button>")
       .click(handleDeleteCurrentSetting)
       .hide();
 
@@ -253,14 +299,54 @@
         }
     });
 
+    const addBtn = $("<button>新增</button>").click(() => {
+      const deleteRowBtn = $("<button>删除</button>").click(function () {
+        if (confirm(`确认删除此行吗?`)) {
+            $(this).closest("tr").remove();
+            checkAndAdjustNameColumnWrap();
+        }
+      });
+      const deleteTd = $("<td>").append(deleteRowBtn);
+      const tr = $("<tr class='cookie-row'>").append(
+        `<td class="editable cookie-name"></td><td class="editable cookie-value"></td><td class="editable">${domain}</td><td class="editable">/</td><td class="editable"></td><td></td><td class="editable">false</td><td class="editable">false</td><td class="editable">Lax</td>`,
+        deleteTd
+      );
+      $(`.${mainClassName} tbody`).append(tr);
+      checkAndAdjustNameColumnWrap();
+    });
+
+    const saveBtn = $("<button>保存</button>").click(() => {
+      const currentTitle = $(`.${mainClassName} .titleInput`).val().trim();
+      const savedCookies = saveCookie(); // saveCookie now handles title validation
+      if (savedCookies) {
+        refreshSettingsUI(currentTitle); // Refresh and reselect the saved/updated title
+      }
+    });
+
+    const applyBtn = $("<button>保存并导入</button>").click(() => {
+      applyCookie();
+    });
+
+    const copyBtn = $("<button>复制</button>").click(() => {
+        copyCookiesToClipboard();
+    });
 
     const closeBtn = $("<button>关闭</button>").click(closePannel);
+
+    const topButtonGroup = $("<div class='topButtonGroup'></div>").append(
+      addBtn,
+      saveBtn,
+      applyBtn,
+      copyBtn,
+      closeBtn
+    );
+
     const topDiv = $("<div class='topWrapper'>").append(
       `<span>当前域名: ${domain}</span>`,
       titleSelect,
       deleteSettingBtn,
       titleInput,
-      closeBtn
+      topButtonGroup
     );
 
     const cookieTable = $("<table class='cookieTable'></table>")
@@ -302,43 +388,7 @@
         textarea.focus();
       });
 
-    const addBtn = $("<button>新增</button>").click(() => {
-      const deleteRowBtn = $("<button>删除</button>").click(function () {
-        if (confirm(`确认删除此行吗？`)) {
-            $(this).closest("tr").remove();
-            checkAndAdjustNameColumnWrap();
-        }
-      });
-      const deleteTd = $("<td>").append(deleteRowBtn);
-      const tr = $("<tr class='cookie-row'>").append(
-        `<td class="editable cookie-name"></td><td class="editable cookie-value"></td><td class="editable">${domain}</td><td class="editable">/</td><td class="editable"></td><td></td><td class="editable">false</td><td class="editable">false</td><td class="editable">Lax</td>`,
-        deleteTd
-      );
-      $(`.${mainClassName} tbody`).append(tr);
-      checkAndAdjustNameColumnWrap();
-    });
-
-    const saveBtn = $("<button>保存</button>").click(() => {
-      const currentTitle = $(`.${mainClassName} .titleInput`).val().trim();
-      const savedCookies = saveCookie(); // saveCookie now handles title validation
-      if (savedCookies) {
-        //alert(`配置 "${currentTitle}" 已保存!`);
-        refreshSettingsUI(currentTitle); // Refresh and reselect the saved/updated title
-      }
-    });
-
-    const applyBtn = $("<button>保存并导入</button>").click(() => {
-      applyCookie();
-    });
-
-    // --- 新增按钮 ---
-    const copyBtn = $("<button>复制</button>").click(() => {
-        copyCookiesToClipboard();
-    });
-
-    // --- 修改按钮容器 ---
-    const btnWrapper = $("<div class='btnWrapper'></div>").append(addBtn, saveBtn, applyBtn, copyBtn);
-    return $(`<div class='${mainClassName}'></div>`).append(topDiv, cookieTable, btnWrapper);
+    return $(`<div class='${mainClassName}'></div>`).append(topDiv, cookieTable);
   }
 
   function initPage() {
@@ -357,7 +407,7 @@
       return undefined;
     }
     if (title === LIVE_COOKIES_OPTION_TEXT) {
-        alert(`配置名称不能是 "${LIVE_COOKIES_OPTION_TEXT}". 请输入一个不同的名称`);
+        alert(`配置名称不能是 "${LIVE_COOKIES_OPTION_TEXT}". 请输入不同的名称`);
         return undefined;
     }
 
@@ -407,8 +457,7 @@
     // 1. Get all existing cookies that the script can access.
     GM_cookie.list({}, function(existingCookies, error) {
         if (error) {
-            alert('获取现有Cookie列表失败，操作已取消');
-            console.error('Error listing cookies for deletion:', error);
+            alert('获取现有Cookie列表失败');
             return;
         }
 
@@ -422,7 +471,7 @@
             const totalToSet = cookiesToApply.length;
 
             if (totalToSet === 0) {
-                alert("所有现有Cookie已被清除页面即将刷新");
+                alert("所有现有Cookie已被清除");
                 closePannel();
                 location.reload();
                 return;
@@ -439,14 +488,12 @@
 
                 GM_cookie.set(cookieDetails, function (setError) {
                     if (setError) {
-                        console.error("设置Cookie失败:", setError, cookieDetails);
                         errorCount++;
                     } else {
                         successCount++;
                     }
                     // Check if all new cookies have been processed
                     if (successCount + errorCount === totalToSet) {
-                        //alert(`配置: ${currentTitle}\n导入完成\n\n清除现有☢: ${totalToDelete}\n导入成功✔: ${successCount}\n导入失败❌: ${errorCount}\n\n页面即将刷新`);
                         closePannel();
                         location.reload();
                     }
@@ -456,23 +503,19 @@
 
         // 2. If there are no existing cookies, go straight to setting new ones.
         if (totalToDelete === 0) {
-            console.log("没有需要删除的现有Cookie");
             setNewCookies();
             return;
         }
 
         // 3. Delete each existing cookie.
-        console.log(`准备删除 ${totalToDelete} 个现有Cookie...`);
         existingCookies.forEach(cookie => {
             // Use the specific details from the listed cookie to ensure correct deletion.
             GM_cookie.delete({ name: cookie.name, domain: cookie.domain, path: cookie.path }, function(deleteError) {
                 if (deleteError) {
-                    console.error('删除Cookie失败:', deleteError, cookie);
                 }
                 deletedCount++;
                 // 4. After all deletions are attempted, proceed to set the new cookies.
                 if (deletedCount === totalToDelete) {
-                    console.log("所有现有Cookie已处理完毕");
                     setNewCookies();
                 }
             });
@@ -480,7 +523,6 @@
     });
   }
 
-  // --- 新增函数 ---
   /**
    * Copies the current set of cookies (Name and Value) to the clipboard.
    * Format: Name1=Value1;Name2=Value2;Name3=Value3;
@@ -522,7 +564,7 @@
     const tbody = $(`.${mainClassName} tbody`);
     tbody.html("");
     if (!cookiesArray || cookiesArray.length === 0) {
-      tbody.html("<tr><td colspan='10'>没有Cookies数据显示</td></tr>");
+      tbody.html("<tr><td colspan='10'>没有Cookies数据</td></tr>");
       checkAndAdjustNameColumnWrap();
       return;
     }
