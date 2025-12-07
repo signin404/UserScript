@@ -740,8 +740,15 @@
     //      核心扫描管道 (JSQR + ZXing)
     // ==========================================
 
+    // 让浏览器有机会渲染一帧 (避免 UI 假死)
+    function yieldToMain() {
+        return new Promise(resolve => setTimeout(resolve, 0));
+    }
+
     async function runScanPipeline(canvas, context, targetEl, force, type, cacheKey, isCrop, prevCache) {
         if (force) requestShowTooltip("⌛ 正在进行强制解析...", targetEl);
+
+        await yieldToMain();
 
         let result = null;
         const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
@@ -754,6 +761,7 @@
         if (force && prevCache && prevCache.status === 'failed' && prevCache.reason === 'standard_failed') {
             skipStandard = true;
             requestShowTooltip("⌛ 深度解析...", targetEl);
+            await yieldToMain();
         }
 
         // --- 阶段 1: 标准解析 ---
@@ -764,6 +772,8 @@
                 handleSuccess(result.data, "JSQR" + suffix, type, cacheKey, targetEl);
                 return;
             }
+
+            await yieldToMain();
 
             // 1.2 ZXing 标准
             result = await tryZXing(canvas, force);
@@ -781,6 +791,9 @@
 
         // --- 阶段 2: 增强解析 (仅强制模式) ---
 
+        requestShowTooltip("⌛ 正在尝试反色解析...", targetEl);
+        await yieldToMain();
+
         // 反色数据准备
         const invertedData = new Uint8ClampedArray(imageData.data);
         for (let i = 0; i < invertedData.length; i += 4) {
@@ -797,6 +810,8 @@
             return;
         }
 
+        await yieldToMain();
+
         // 2.2 ZXing 反色
         const invertedImageData = new ImageData(invertedData, canvas.width, canvas.height);
         context.putImageData(invertedImageData, 0, 0);
@@ -805,6 +820,9 @@
             handleSuccess(result, "ZXing 反色" + suffix, type, cacheKey, targetEl);
             return;
         }
+
+        requestShowTooltip("⌛ 正在尝试二值化解析...", targetEl);
+        await yieldToMain();
 
         // 二值化数据准备
         const binarizedData = new Uint8ClampedArray(imageData.data);
@@ -829,6 +847,8 @@
             handleSuccess(result.data, "JSQR 二值化" + suffix, type, cacheKey, targetEl);
             return;
         }
+
+        await yieldToMain();
 
         // 2.4 ZXing 二值化
         const binarizedImageData = new ImageData(binarizedData, canvas.width, canvas.height);
