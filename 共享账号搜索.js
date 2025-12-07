@@ -2,7 +2,6 @@
 // @name         共享账号搜索
 // @description  获取共享账号并自动填写
 // @namespace    http://tampermonkey.net/
-// @icon        http://bugmenot.com/favicon.ico
 // @connect        bugmenot.com
 // @connect        freeaccount.biz
 // @connect        password-login.com
@@ -11,9 +10,10 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
-// @version      1.5
+// @version      1.6
 // @author       Hồng Minh Tâm & Gemini
 // @license      GPLv3
+// @icon        data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAA6lBMVEVHcEz9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH7SD/9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkEk7mAFAAAATXRSTlMABrJ4kx/v8ffNAVx0RPn4qGVZv/uIPa7EdiAOYIqh3DjX4VdjuPPoE+5YTtSHYsB5gMj6FDsjpEDTZjzdmsIanuT0BdqLnAsERlPskaOVQUwAAACxSURBVBjTbc/VDsJQEATQKdTQFooVK+7u7g77/7/D7SUBEpiHTc68TBb4m2wGyBe/ikJOLlVrH1fKxKKM3kWdeAIvBUVh0LC9WAtikBUxWk615nAeJutEMVZIphqaAIKDQpopAXFpv9twO8P+sxSHoh7Iw40rWaoCMX2kADdu9EiL9s52xQ39fmE3kYyySdszomgygRTJ3jG5up026V6ZUogYPrg9PX/f1XLDZ0R+Hn8C9iYYIKWYFpsAAAAASUVORK5CYII=
 // ==/UserScript==
 
 (function () {

@@ -11,9 +11,10 @@
 // @grant        GM_setClipboard
 // @grant        GM_addStyle
 // @run-at       document-idle
-// @version      12.2
+// @version      12.3
 // @author       Gemini
 // @license      GPLv3
+// @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyLjYxNCAzLjQxNEMyOC4zMS0uODkgMjEuMzMyLS44OSAxNy4wMjcgMy40MTRjLTMuMzkxIDMuMzkyLTQuMDk4IDguNDM5LTIuMTQ0IDEyLjUzNWwtMy45MTYgMy45MTVhMi40NCAyLjQ0IDAgMCAwLS42MjUgMi4zNTlsLTEuOTczIDEuOTcyYTEuMjIgMS4yMiAwIDAgMC0xLjczMSAwbC0xLjczMSAxLjczMmExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMybC0uODY3Ljg2NGExLjIyNCAxLjIyNCAwIDAgMC0xLjczMSAwbC0uODY2Ljg2N2ExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMyYy4wMTUuMDE2LjAzNi4wMi4wNTEuMDMzYTMuMDYyIDMuMDYyIDAgMCAwIDQuNzExIDMuODYzTDIwLjA4IDIxLjE0NGM0LjA5NyAxLjk1NSA5LjE0NCAxLjI0NyAxMi41MzUtMi4xNDYgNC4zMDItNC4zMDIgNC4zMDItMTEuMjgtLjAwMS0xNS41ODRtLTEuNzMxIDUuMTk1YTIuNDUgMi40NSAwIDAgMS0zLjQ2NC0zLjQ2NCAyLjQ1IDIuNDUgMCAwIDEgMy40NjQgMy40NjQiLz48L3N2Zz4=
 // ==/UserScript==
 
 (function() {

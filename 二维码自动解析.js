@@ -10,9 +10,10 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @run-at       document-start
-// @version      2.7
+// @version      2.8
 // @author       Gemini
 // @license      GPLv3
+// @icon      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABmJLR0QA/wD/AP+gvaeTAAABZElEQVR4nO3cQUrEMBiAURXv5QFceVJXHsCT6VYGpA5J+6X2vbVI4OPvZNJpHx4AAICredz6g5e3j68jFvKbz/fXzTX+dLb1Pu21EP5GgJgAMQFiAsQEiAkQex79B/fue28dvW9fbb0mICZATIDY8GfAra1r5Og1eLZ6vSYgJkBMgJgAMQFiAsQEiE3/HrDaPn9LvV4TEBMgJkBs+DOg/h3OvVZbrwmICRATICZATICYADEBYrufg4zecx3dt89+vmD22ZEJiAkQEyAmQEyAmAAxAWLDe9p6nz/b6Ho9J3wyAsQEiG3eEx69Rq92jV+NCYgJEBMgdvr3BdXPeI0yATEBYgLELveuiL3PrpwFncz0J2Rmq3dhezMBscu/K6JmAmICxASILb8Lmm21syUTEFt+As72q4p7mYDY5d8VUTMBMQFiAsSWvye85ehnwNwP+GcEiAkQEyAmQEyAmAAAAAAAcJBvjUVu7tMNP9IAAAAASUVORK5CYII=
 // ==/UserScript==
 
 (function() {

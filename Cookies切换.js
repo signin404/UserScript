@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Cookies切换
 // @description  掌控你的cookie吧~~
-// @namespace    http://tampermonkey.net/
+// @namespace    https://tampermonkey.net/
 // @require      https://code.jquery.com/jquery-3.6.0.min.js
 // @match        *://*/*
 // @grant        GM_cookie

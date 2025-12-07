@@ -4,9 +4,10 @@
 // @namespace    http://tampermonkey.net/
 // @match        *://*/*
 // @run-at       document-start
-// @version      2.5
+// @version      2.6
 // @author       Gemini
 // @license      GPLv3
+// @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0REMkU0NCIgZD0iTTM2IDMyYTQgNCAwIDAgMS00IDRINGE0IDQgMCAwIDEtNC00VjRhNCA0IDAgMCAxIDQtNGgyOGE0IDQgMCAwIDEgNCA0eiIvPjxwYXRoIGZpbGw9IiNGRkYiIGQ9Ik0xNC43NDcgOS4xMjVjLjUyNy0xLjQyNiAxLjczNi0yLjU3MyAzLjMxNy0yLjU3MyAxLjY0MyAwIDIuNzkyIDEuMDg1IDMuMzE4IDIuNTczbDYuMDc3IDE2Ljg2N2MuMTg2LjQ5Ni4yNDguOTMxLjI0OCAxLjE0NyAwIDEuMjA5LS45OTIgMi4wNDYtMi4xMzkgMi4wNDYtMS4zMDMgMC0xLjk1NC0uNjgyLTIuMjY0LTEuNjExbC0uOTMxLTIuOTE1aC04LjYybC0uOTMgMi44ODRjLS4zMS45NjEtLjk2MSAxLjY0Mi0yLjIzMiAxLjY0Mi0xLjI0IDAtMi4yOTQtLjkzLTIuMjk0LTIuMTcgMC0uNDk2LjE1NS0uODY4LjIxNy0xLjAyM3ptLjM0IDExLjI1Nmg1Ljg5MWwtMi44ODMtOC45OTJoLS4wNjJ6Ii8+PC9zdmc+
 // ==/UserScript==
 
 (function() {
