@@ -379,7 +379,7 @@
                     <div class="cf-header-title">剪贴板过滤器</div>
                     <div style="width: 26px !important;"></div>
                     <div style="flex: 1.2 !important; display: flex !important; gap: 0 !important;">
-                        <input type="text" id="cf-search-input" placeholder="搜索..." title="输入关键词">
+                        <input type="text" id="cf-search-input" placeholder="搜索..." title="输入关键词\n* 筛选适用于所有网站的规则">
                         <div style="width: 27px !important;"></div>
                     </div>
                     <div style="flex: 2 !important;"></div>
@@ -453,9 +453,25 @@
 
             currentRules.forEach((rule, index) => {
                 if (filterText) {
-                    const matchText = (rule.match || '').toLowerCase();
-                    const findText = (rule.find || '').toLowerCase();
-                    if (!matchText.includes(filterText) && !findText.includes(filterText)) return;
+                    if (filterText === '*') {
+                        // 特殊逻辑：输入 * 时 只显示适用于所有网站的规则
+                        // 即：match 字段为空或只包含空格的规则
+                        if (rule.match && rule.match.trim() !== "") {
+                            return; // 如果有特定网站匹配 则隐藏
+                        }
+                    } else {
+                        // 原有逻辑：普通关键词搜索
+                        const matchText = (rule.match || '').toLowerCase();
+                        const findText = (rule.find || '').toLowerCase();
+                        // 同时也搜索替换内容 方便查找
+                        const replaceText = (rule.replace || '').toLowerCase();
+
+                        if (!matchText.includes(filterText) &&
+                            !findText.includes(filterText) &&
+                            !replaceText.includes(filterText)) {
+                            return;
+                        }
+                    }
                 }
 
                 if (rule.enabled === undefined) rule.enabled = true;
