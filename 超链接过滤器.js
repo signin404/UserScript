@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         超链接过滤器
-// @description  鼠标悬停时自动替换链接
+// @description  鼠标悬停时自动过滤链接
 // @namespace    http://tampermonkey.net/
 // @match        *://*/*
 // @grant        GM_registerMenuCommand
@@ -590,7 +590,7 @@ function openSettings() {
         <div id="decloak-settings-content">
             <div class="decloak-header">
                 <!-- 标题层：绝对居中 -->
-                <div class="decloak-header-title">链接替换规则</div>
+                <div class="decloak-header-title">链接过滤规则</div>
 
                 <!-- 布局层：模拟下方表格的列宽 实现对齐 -->
                 <!-- 1. 占位：对应 Toggle 按钮 -->

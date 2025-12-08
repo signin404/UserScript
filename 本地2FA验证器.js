@@ -12,7 +12,7 @@
 // @grant        GM_addStyle
 // @grant        GM_notification
 // @run-at       document-idle
-// @version      12.4
+// @version      12.5
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyLjYxNCAzLjQxNEMyOC4zMS0uODkgMjEuMzMyLS44OSAxNy4wMjcgMy40MTRjLTMuMzkxIDMuMzkyLTQuMDk4IDguNDM5LTIuMTQ0IDEyLjUzNWwtMy45MTYgMy45MTVhMi40NCAyLjQ0IDAgMCAwLS42MjUgMi4zNTlsLTEuOTczIDEuOTcyYTEuMjIgMS4yMiAwIDAgMC0xLjczMSAwbC0xLjczMSAxLjczMmExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMybC0uODY3Ljg2NGExLjIyNCAxLjIyNCAwIDAgMC0xLjczMSAwbC0uODY2Ljg2N2ExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMyYy4wMTUuMDE2LjAzNi4wMi4wNTEuMDMzYTMuMDYyIDMuMDYyIDAgMCAwIDQuNzExIDMuODYzTDIwLjA4IDIxLjE0NGM0LjA5NyAxLjk1NSA5LjE0NCAxLjI0NyAxMi41MzUtMi4xNDYgNC4zMDItNC4zMDIgNC4zMDItMTEuMjgtLjAwMS0xNS41ODRtLTEuNzMxIDUuMTk1YTIuNDUgMi40NSAwIDAgMS0zLjQ2NC0zLjQ2NCAyLjQ1IDIuNDUgMCAwIDEgMy40NjQgMy40NjQiLz48L3N2Zz4=
@@ -751,6 +751,7 @@
 
     // --- Selection Mode Logic ---
     function startSelectionMode(targetInputId, targetSelectId) {
+        // 隐藏界面
         modalOverlay.style.display = 'none';
         container.style.display = 'none';
 
@@ -764,20 +765,26 @@
 
         const cleanup = () => {
             document.body.style.cursor = originalCursor;
-            document.removeEventListener('mousedown', handler, true);
-            document.removeEventListener('click', handler, true);
+            // 移除所有类型的监听
+            ['mousedown', 'mouseup', 'click', 'contextmenu'].forEach(evt => {
+                document.removeEventListener(evt, handler, true);
+            });
             document.removeEventListener('keydown', escHandler, true);
-            document.removeEventListener('contextmenu', rightClickHandler, true);
+
             if (notif.parentNode) notif.parentNode.removeChild(notif);
+
+            // 恢复界面显示
             modalOverlay.style.display = 'flex';
             container.style.display = 'flex';
         };
 
         const handler = (e) => {
+            // 核心：在捕获阶段(capture)就阻止事件 防止网页接收到
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
 
+            // 只有在鼠标松开(click)时才执行选择逻辑 避免 mousedown 误触
             if (e.type === 'click') {
                 const optimalTarget = findOptimalClickTarget(e.target);
                 const { type, selector } = generateSelectorForElement(optimalTarget);
@@ -786,23 +793,25 @@
                 document.getElementById(targetSelectId).value = type;
 
                 cleanup();
+            } else if (e.type === 'contextmenu') {
+                // 右键取消
+                cleanup();
             }
         };
 
-        const rightClickHandler = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            cleanup();
-        };
-
         const escHandler = (e) => {
-            if (e.key === 'Escape') cleanup();
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                cleanup();
+            }
         };
 
-        document.addEventListener('mousedown', handler, true);
-        document.addEventListener('click', handler, true);
+        // 监听所有相关事件 使用 capture=true 确保最先捕获
+        ['mousedown', 'mouseup', 'click', 'contextmenu'].forEach(evt => {
+            document.addEventListener(evt, handler, true);
+        });
         document.addEventListener('keydown', escHandler, true);
-        document.addEventListener('contextmenu', rightClickHandler, true);
     }
 
     // --- Modal Logic ---
@@ -902,88 +911,104 @@
     // 轮询 2FA 输入框
     function start2FAPolling(data) {
         if (!data.secret || !data.inputSelector) return;
-
         let attempts = 0;
         const maxAttempts = 180; // 轮询超时 (秒)
 
         const pollInterval = setInterval(async () => {
             attempts++;
-            if (attempts > maxAttempts) {
-                clearInterval(pollInterval);
-                return;
-            }
+            if (attempts > maxAttempts) { clearInterval(pollInterval); return; }
 
             const inputEl = getElementBySelector(data.inputSelectorType, data.inputSelector);
-            if (inputEl) {
-                // 检查是否已经填写成功
+            if (inputEl && inputEl.offsetParent !== null) {
                 if (inputEl.value && inputEl.value.length === 6) {
-                    // 只有当值存在且长度正确时 才认为成功 停止轮询
                     clearInterval(pollInterval);
-
-                    // 再次尝试点击确定（防止之前点击没反应）
                     if (data.btnSelector) {
                         const btnEl = getElementBySelector(data.btnSelectorType, data.btnSelector);
                         if (btnEl) setTimeout(() => btnEl.click(), 300);
                     }
                     return;
                 }
-
-                // 尝试生成并填写
                 const code = await generateTOTP(data);
-                if (code !== "错误" && code !== "无密钥") {
-                    // 只有当当前值不正确时才填写 避免重复触发事件
-                    if (inputEl.value !== code) {
-                        triggerInputEvent(inputEl, code);
-                    }
-
-                    // 填写后不立即清除 Interval 依靠下一次轮询检查 value 是否成功
-                    // 如果成功 下一次轮询会进入上面的 if (inputEl.value...) 分支并清除
+                if (code !== "错误" && code !== "无密钥" && inputEl.value !== code) {
+                    triggerInputEvent(inputEl, code);
                 }
-            }
-        }, 1000); // 每秒检查一次
-    }
-
-    // 轮询 密码输入框 (增强版：长时轮询 + 失败重试)
-    function pollForPasswordAndLogin(data) {
-        if (!data.passSelector) return;
-
-        let attempts = 0;
-        const maxAttempts = 180; // // 轮询超时 (秒)
-
-        const passInterval = setInterval(() => {
-            attempts++;
-            if (attempts > maxAttempts) {
-                clearInterval(passInterval);
-                return;
-            }
-
-            const passEl = getElementBySelector(data.passSelectorType, data.passSelector);
-            // 确保元素存在且可见
-            if (passEl && passEl.offsetParent !== null) {
-
-                // 检查是否填写成功
-                if (passEl.value === data.password) {
-                    clearInterval(passInterval);
-
-                    // 点击登录
-                    if (data.loginBtnSelector) {
-                        const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
-                        if (loginBtn) {
-                            setTimeout(() => loginBtn.click(), 500);
-                        }
-                    }
-                    return;
-                }
-
-                // 尝试填写
-                if (passEl.value !== data.password) {
-                    triggerInputEvent(passEl, data.password);
-                }
-                // 填写后不立即清除 等待下一次轮询确认值已填入
             }
         }, 1000);
     }
 
+    // 2. 合并后的登录轮询器 (同时处理 账号、密码、下一步、登录)
+    function pollForLogin(data) {
+        // 如果连账号或密码选择器都没配 就没必要轮询登录逻辑了
+        if (!data.userSelector && !data.passSelector) return;
+
+        let attempts = 0;
+        const maxAttempts = 180; // 轮询超时 (秒)
+
+        const loginInterval = setInterval(() => {
+            attempts++;
+            if (attempts > maxAttempts) { clearInterval(loginInterval); return; }
+
+            // 尝试获取元素
+            const userEl = data.userSelector ? getElementBySelector(data.userSelectorType, data.userSelector) : null;
+            const passEl = data.passSelector ? getElementBySelector(data.passSelectorType, data.passSelector) : null;
+
+            // 判断可见性 (offsetParent !== null 代表元素在页面上可见)
+            const isUserVisible = userEl && userEl.offsetParent !== null;
+            const isPassVisible = passEl && passEl.offsetParent !== null;
+
+            // --- 自动填写逻辑 (只要看见了就填) ---
+            if (isUserVisible && userEl.value !== data.username) {
+                triggerInputEvent(userEl, data.username);
+            }
+            if (isPassVisible && passEl.value !== data.password) {
+                triggerInputEvent(passEl, data.password);
+            }
+
+            // --- 行为判断逻辑 ---
+
+            // 场景 A: 账号和密码框同时存在 (单步登录)
+            if (isUserVisible && isPassVisible) {
+                // 确保两个都填好了
+                if (userEl.value === data.username && passEl.value === data.password) {
+                    if (data.loginBtnSelector) {
+                        const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
+                        if (loginBtn) {
+                            clearInterval(loginInterval); // 任务完成
+                            setTimeout(() => loginBtn.click(), 500);
+                        }
+                    }
+                }
+            }
+            // 场景 B: 仅账号框存在 (分步登录 - 第一步)
+            else if (isUserVisible && !isPassVisible) {
+                // 必须配置了“下一步按钮”才执行点击 否则可能是单步登录但密码框还没加载出来 需要等待
+                if (data.nextBtnSelector && userEl.value === data.username) {
+                    const nextBtn = getElementBySelector(data.nextBtnSelectorType, data.nextBtnSelector);
+                    if (nextBtn) {
+                        clearInterval(loginInterval); // 点击下一步后 页面通常会变 停止当前轮询
+                        setTimeout(() => nextBtn.click(), 500);
+                        // 注意：点击后页面可能刷新 脚本会重新加载并重新启动 checkAndRunAutoFill
+                        // 如果页面不刷新(AJAX) 建议此处不清除 interval 或者依靠 checkAndRunAutoFill 的再次调用
+                    }
+                }
+            }
+            // 场景 C: 仅密码框存在 (分步登录 - 第二步)
+            else if (!isUserVisible && isPassVisible) {
+                if (passEl.value === data.password) {
+                    if (data.loginBtnSelector) {
+                        const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
+                        if (loginBtn) {
+                            clearInterval(loginInterval); // 任务完成
+                            setTimeout(() => loginBtn.click(), 500);
+                        }
+                    }
+                }
+            }
+
+        }, 1000);
+    }
+
+    // 3. 主逻辑
     async function checkAndRunAutoFill() {
         const keys = await GM_listValues();
         const currentUrl = window.location.href;
@@ -998,57 +1023,13 @@
             const regex = new RegExp(data.urlPattern);
             if (regex.test(currentUrl) || regex.test(currentHostname)) {
 
-                // --- 核心修改：分步登录模式下 始终启动所有后续步骤的轮询 ---
-                if (data.nextBtnSelector) {
-                    // 1. 始终寻找密码框 (应对刷新后直接进入密码页)
-                    if (data.passSelector) pollForPasswordAndLogin(data);
-                    // 2. 始终寻找 2FA 框 (应对刷新后直接进入 2FA 页)
-                    start2FAPolling(data);
-                }
+                // 1. 启动统一的登录轮询器 (处理账号、密码、下一步、登录)
+                pollForLogin(data);
 
-                // --- Phase 1: Check for User Field (账号填写逻辑) ---
-                if (data.userSelector) {
-                    const userEl = getElementBySelector(data.userSelectorType, data.userSelector);
+                // 2. 始终启动 2FA 轮询 (独立运行)
+                start2FAPolling(data);
 
-                    if (userEl) {
-                        // 仅当为空或不匹配时填写
-                        if (!userEl.value || userEl.value === data.username) {
-                            if (userEl.value !== data.username) {
-                                triggerInputEvent(userEl, data.username);
-                            }
-
-                            // --- Branch: Multi-step vs Single-step ---
-                            if (data.nextBtnSelector) {
-                                // 分步模式：点击下一步
-                                const nextBtn = getElementBySelector(data.nextBtnSelectorType, data.nextBtnSelector);
-                                if (nextBtn) {
-                                    setTimeout(() => nextBtn.click(), 500);
-                                }
-                            } else if (data.passSelector) {
-                                // 单步模式：直接填密码
-                                const passEl = getElementBySelector(data.passSelectorType, data.passSelector);
-                                if (passEl) {
-                                    triggerInputEvent(passEl, data.password);
-
-                                    // 点击登录
-                                    if (data.loginBtnSelector) {
-                                        const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
-                                        if (loginBtn) {
-                                            setTimeout(() => loginBtn.click(), 500);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 如果不是分步模式 也启动 2FA 轮询 (作为兜底)
-                if (!data.nextBtnSelector) {
-                    start2FAPolling(data);
-                }
-
-                return; // Match found
+                return; // 找到匹配配置后停止
             }
         }
     }
@@ -1080,6 +1061,17 @@
     }
 
     // --- Event Listeners ---
+
+    // [新增] 阻止脚本界面的事件冒泡到网页 (防止点击脚本导致网页菜单关闭)
+    function stopPropagation(e) {
+        e.stopPropagation();
+    }
+    // 对主容器和模态框应用隔离
+    [container, modalOverlay].forEach(el => {
+        ['click', 'mousedown', 'mouseup', 'keydown', 'keyup', 'contextmenu'].forEach(evtName => {
+            el.addEventListener(evtName, stopPropagation, false);
+        });
+    });
 
     GM_registerMenuCommand("显示验证器", toggleContainer);
 
