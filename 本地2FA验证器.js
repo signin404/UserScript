@@ -12,7 +12,7 @@
 // @grant        GM_addStyle
 // @grant        GM_notification
 // @run-at       document-idle
-// @version      12.5
+// @version      12.6
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyLjYxNCAzLjQxNEMyOC4zMS0uODkgMjEuMzMyLS44OSAxNy4wMjcgMy40MTRjLTMuMzkxIDMuMzkyLTQuMDk4IDguNDM5LTIuMTQ0IDEyLjUzNWwtMy45MTYgMy45MTVhMi40NCAyLjQ0IDAgMCAwLS42MjUgMi4zNTlsLTEuOTczIDEuOTcyYTEuMjIgMS4yMiAwIDAgMC0xLjczMSAwbC0xLjczMSAxLjczMmExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMybC0uODY3Ljg2NGExLjIyNCAxLjIyNCAwIDAgMC0xLjczMSAwbC0uODY2Ljg2N2ExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMyYy4wMTUuMDE2LjAzNi4wMi4wNTEuMDMzYTMuMDYyIDMuMDYyIDAgMCAwIDQuNzExIDMuODYzTDIwLjA4IDIxLjE0NGM0LjA5NyAxLjk1NSA5LjE0NCAxLjI0NyAxMi41MzUtMi4xNDYgNC4zMDItNC4zMDIgNC4zMDItMTEuMjgtLjAwMS0xNS41ODRtLTEuNzMxIDUuMTk1YTIuNDUgMi40NSAwIDAgMS0zLjQ2NC0zLjQ2NCAyLjQ1IDIuNDUgMCAwIDEgMy40NjQgMy40NjQiLz48L3N2Zz4=
@@ -1068,12 +1068,16 @@
     }
     // 对主容器和模态框应用隔离
     [container, modalOverlay].forEach(el => {
-        ['click', 'mousedown', 'mouseup', 'keydown', 'keyup', 'contextmenu'].forEach(evtName => {
+        ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu'].forEach(evtName => {
             el.addEventListener(evtName, stopPropagation, false);
         });
     });
 
     GM_registerMenuCommand("显示验证器", toggleContainer);
+
+    // 密码框聚焦时显示明文 失焦时隐藏
+    inputPassword.addEventListener('focus', () => { inputPassword.type = 'text'; });
+    inputPassword.addEventListener('blur', () => { inputPassword.type = 'password'; });
 
     closeBtn.addEventListener('click', hideContainer);
     addBtn.addEventListener('click', () => openModal());
