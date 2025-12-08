@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_addValueChangeListener
-// @version      1.9
+// @version      2.0
 // @author       Max & Gemini
 // @license      MPL2.0
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iIzk5QUFCNSIgZD0iTTIwIDIuMDQ3VjJhMiAyIDAgMCAwLTQgMHYuMDQ3QzcuNzM3IDIuNDIyIDYgNS4xMjcgNiA3djE3YzAgNi42MjcgNS4zNzMgMTIgMTIgMTJzMTItNS4zNzMgMTItMTJWN2MwLTEuODczLTEuNzM3LTQuNTc4LTEwLTQuOTUzIi8+PHBhdGggZmlsbD0iIzI5MkYzMyIgZD0iTTIyIDkuMTk5di03YTM2IDM2IDAgMCAwLTItLjE1MVY5YTIgMiAwIDAgMS00IDBWMi4wNDhxLTEuMDY3LjA1MS0yIC4xNTF2N0M3LjQ1OSA5Ljg5IDYgMTIuMjkgNiAxNHYyYzAtMS43MjUgMS40ODItNC4xNTMgOC4xNjktNC44MTlDMTQuNjQ2IDEyLjIyOCAxNi4xNzEgMTMgMTggMTNzMy4zNTUtLjc3MiAzLjgzMS0xLjgxOUMyOC41MTggMTEuODQ3IDMwIDE0LjI3NSAzMCAxNnYtMmMwLTEuNzEtMS40NTktNC4xMS04LTQuODAxIi8+PC9zdmc+
@@ -324,6 +324,19 @@ class WebElementHandler {
                     text-align: center !important;
                     border-radius: 0 !important;
                 }
+
+                #autoClickMenu button {
+                    text-align: center !important;
+
+                    /* 使用 Flexbox 强制垂直居中 */
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+
+                    /* 重置 padding 防止 padding 导致的不对称 */
+                    padding: 0 !important;
+                }
+
                 #autoClickMenu h3, #autoClickMenu h4, #autoClickMenu p, #autoClickMenu label {
                     font-size: 9px;
                     display: block;
@@ -358,6 +371,7 @@ class WebElementHandler {
                     flex-direction: row;
                     flex-wrap: wrap; /* 宽度不足时自动换行 */
                     align-items: center;
+                    justify-content: center;
                 }
                 #autoClickMenu .ruleHeader {
                     cursor: pointer;
@@ -608,10 +622,20 @@ class WebElementHandler {
             Array.from(document.querySelectorAll('iframe, frame')).forEach(f => f.contentWindow?.postMessage(msg, '*'));
         };
 
+        // 修改 1: 定义右键退出处理函数
+        const rightClickHandler = (event) => {
+            event.preventDefault(); // 阻止默认的右键菜单弹出
+            event.stopPropagation();
+            cleanup();
+        };
+
         const cleanup = () => {
             broadcastMessage({ type: 'AUTO_CLICK_STOP_SELECTION_MODE' });
             window.removeEventListener('message', messageHandler);
-            document.removeEventListener('keydown', escapeHandler, true);
+
+            // 修改 2: 移除右键监听
+            document.removeEventListener('contextmenu', rightClickHandler, true);
+
             if (document.body.contains(message)) document.body.removeChild(message);
             document.body.style.cursor = originalCursor;
             menu.style.display = 'block';
@@ -631,17 +655,12 @@ class WebElementHandler {
             }
         };
 
-        const escapeHandler = (event) => {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                event.stopPropagation();
-                cleanup();
-            }
-        };
-
         menu.style.display = 'none';
         window.addEventListener('message', messageHandler);
-        document.addEventListener('keydown', escapeHandler, true);
+
+        // 修改 3: 添加右键监听 (使用捕获模式 true 确保优先拦截)
+        document.addEventListener('contextmenu', rightClickHandler, true);
+
         broadcastMessage({ type: 'AUTO_CLICK_START_SELECTION_MODE' });
     }
 
