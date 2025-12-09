@@ -12,7 +12,7 @@
 // @grant        GM_addStyle
 // @grant        GM_notification
 // @run-at       document-idle
-// @version      12.8
+// @version      12.9
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyLjYxNCAzLjQxNEMyOC4zMS0uODkgMjEuMzMyLS44OSAxNy4wMjcgMy40MTRjLTMuMzkxIDMuMzkyLTQuMDk4IDguNDM5LTIuMTQ0IDEyLjUzNWwtMy45MTYgMy45MTVhMi40NCAyLjQ0IDAgMCAwLS42MjUgMi4zNTlsLTEuOTczIDEuOTcyYTEuMjIgMS4yMiAwIDAgMC0xLjczMSAwbC0xLjczMSAxLjczMmExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMybC0uODY3Ljg2NGExLjIyNCAxLjIyNCAwIDAgMC0xLjczMSAwbC0uODY2Ljg2N2ExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMyYy4wMTUuMDE2LjAzNi4wMi4wNTEuMDMzYTMuMDYyIDMuMDYyIDAgMCAwIDQuNzExIDMuODYzTDIwLjA4IDIxLjE0NGM0LjA5NyAxLjk1NSA5LjE0NCAxLjI0NyAxMi41MzUtMi4xNDYgNC4zMDItNC4zMDIgNC4zMDItMTEuMjgtLjAwMS0xNS41ODRtLTEuNzMxIDUuMTk1YTIuNDUgMi40NSAwIDAgMS0zLjQ2NC0zLjQ2NCAyLjQ1IDIuNDUgMCAwIDEgMy40NjQgMy40NjQiLz48L3N2Zz4=
@@ -991,130 +991,124 @@
 
     // --- Auto Fill Logic (Core) ---
 
-    // 轮询 2FA 输入框
-    function start2FAPolling(data) {
-        if (!data.secret || !data.inputSelector) return;
+    // --- 核心逻辑：统一状态轮询器 ---
+    // 根据当前页面可见的输入框组合 自动判断处于登录的哪个阶段
+    function startUnifiedPolling(data) {
         let attempts = 0;
-        const maxAttempts = 180; // 轮询超时 (秒)
-        let hasFilledCode = false; // [新增] 标记是否已执行过填写
+        const maxAttempts = 180; // 3分钟超时
+
+        // 状态标记：确保每个字段只自动填写一次 允许用户后续手动修改
+        let hasFilledUser = false;
+        let hasFilledPass = false;
+        let hasFilledTOTP = false;
 
         const pollInterval = setInterval(async () => {
             attempts++;
             if (attempts > maxAttempts) { clearInterval(pollInterval); return; }
 
-            const inputEl = getElementBySelector(data.inputSelectorType, data.inputSelector);
-            if (inputEl && inputEl.offsetParent !== null) {
-
-                // 如果尚未填写 执行填写逻辑
-                if (!hasFilledCode) {
-                    const code = await generateTOTP(data);
-                    if (code !== "错误" && code !== "无密钥") {
-                        triggerInputEvent(inputEl, code);
-                        hasFilledCode = true; // [核心] 标记为已填写 后续不再覆盖
-                    }
-                }
-
-                // 检查是否满足点击确定的条件 (值匹配且长度为6)
-                // 注意：这里依然检查 value 是否匹配生成的 code 防止用户输错时自动提交
-                // 如果用户手动改了验证码 通常不需要脚本帮点确定
-                if (inputEl.value && inputEl.value.length === 6) {
-                    // 只有当值确实是脚本生成的那个 或者用户想利用脚本的点击功能时
-                    // 这里简化逻辑：只要长度对 且配置了按钮 就尝试点击
-                    // 但为了防止循环点击 通常点击后页面会跳转
-
-                    // 这里做一个简单的防抖 如果已经填了且匹配 就点击
-                    // 如果用户改了值 脚本不再干涉点击 除非值恰好也是6位
-                    // 鉴于2FA的特殊性 通常不需要手动改 这里保持原样或仅点击一次
-
-                    clearInterval(pollInterval); // 停止轮询
-                    if (data.btnSelector) {
-                        const btnEl = getElementBySelector(data.btnSelectorType, data.btnSelector);
-                        if (btnEl) setTimeout(() => btnEl.click(), 300);
-                    }
-                }
-            }
-        }, 1000);
-    }
-
-    // 2. 合并后的登录轮询器 (优化：只填写一次 允许用户修改)
-    function pollForLogin(data) {
-        if (!data.userSelector && !data.passSelector) return;
-
-        let attempts = 0;
-        const maxAttempts = 180; // 轮询超时 (秒)
-
-        // [新增] 状态标记
-        let hasFilledUser = false;
-        let hasFilledPass = false;
-
-        const loginInterval = setInterval(() => {
-            attempts++;
-            if (attempts > maxAttempts) { clearInterval(loginInterval); return; }
-
+            // 1. 获取所有相关元素
+            // 注意：必须检查 offsetParent !== null 来判断元素是否可见
             const userEl = data.userSelector ? getElementBySelector(data.userSelectorType, data.userSelector) : null;
             const passEl = data.passSelector ? getElementBySelector(data.passSelectorType, data.passSelector) : null;
+            const totpEl = data.inputSelector ? getElementBySelector(data.inputSelectorType, data.inputSelector) : null;
 
             const isUserVisible = userEl && userEl.offsetParent !== null;
             const isPassVisible = passEl && passEl.offsetParent !== null;
+            const isTotpVisible = totpEl && totpEl.offsetParent !== null;
 
-            // --- 1. 账号处理逻辑 (只执行一次) ---
-            if (isUserVisible && !hasFilledUser) {
-                // 无论当前框里有没有值(可能是浏览器预填的) 都强制覆盖一次以确保正确 然后不再触碰
-                triggerInputEvent(userEl, data.username);
+            // --- 场景判断逻辑 ---
 
-                // 处理记住登录
-                if (data.rememberMeSelector) {
-                    const remEl = getElementBySelector(data.rememberMeSelectorType, data.rememberMeSelector);
-                    if (remEl && remEl.offsetParent !== null && !remEl.checked) {
-                        remEl.click();
+            // 场景 4: 仅验证码输入框存在 (身份验证步骤)
+            // 优先级最高：通常如果到了2FA界面 前面的账号密码框要么消失 要么被隐藏
+            if (isTotpVisible && !isUserVisible && !isPassVisible) {
+                // A. 填写验证码
+                if (!hasFilledTOTP) {
+                    const code = await generateTOTP(data);
+                    if (code !== "错误" && code !== "无密钥") {
+                        triggerInputEvent(totpEl, code);
+                        hasFilledTOTP = true; // 锁定 不再覆盖
                     }
                 }
 
-                hasFilledUser = true; // 锁定状态
+                // B. 点击确定 (仅当长度为6且配置了按钮时)
+                if (totpEl.value && totpEl.value.length === 6 && data.btnSelector) {
+                    const confirmBtn = getElementBySelector(data.btnSelectorType, data.btnSelector);
+                    if (confirmBtn && confirmBtn.offsetParent !== null) {
+                        clearInterval(pollInterval); // 任务完成
+                        setTimeout(() => confirmBtn.click(), 300);
+                    }
+                }
+                return; // 2FA处理完直接返回 不处理后面的逻辑
             }
 
-            // --- 2. 密码处理逻辑 (只执行一次) ---
-            if (isPassVisible && !hasFilledPass) {
-                triggerInputEvent(passEl, data.password);
-                hasFilledPass = true; // 锁定状态
-            }
-
-            // --- 3. 行为判断与点击逻辑 ---
-            // 注意：点击逻辑依然会检查 value 是否匹配
-            // 如果用户手动修改了账号/密码 value 将不等于 data.username/password
-            // 此时脚本会自动停止点击操作 这是符合预期的安全行为
-
-            // 场景 A: 单步登录
+            // 场景 1: 账号和密码同时存在 (单步登录)
             if (isUserVisible && isPassVisible) {
-                if (userEl.value === data.username && passEl.value === data.password) {
-                    if (data.loginBtnSelector) {
-                        const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
-                        if (loginBtn) {
-                            clearInterval(loginInterval);
-                            setTimeout(() => loginBtn.click(), 500);
-                        }
+                // A. 填账号
+                if (!hasFilledUser) {
+                    triggerInputEvent(userEl, data.username);
+                    // 处理记住登录
+                    if (data.rememberMeSelector) {
+                        const remEl = getElementBySelector(data.rememberMeSelectorType, data.rememberMeSelector);
+                        if (remEl && remEl.offsetParent !== null && !remEl.checked) remEl.click();
+                    }
+                    hasFilledUser = true;
+                }
+
+                // B. 填密码
+                if (!hasFilledPass) {
+                    triggerInputEvent(passEl, data.password);
+                    hasFilledPass = true;
+                }
+
+                // C. 点击登录 (当两者都匹配时)
+                if (userEl.value === data.username && passEl.value === data.password && data.loginBtnSelector) {
+                    const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
+                    if (loginBtn && loginBtn.offsetParent !== null) {
+                        clearInterval(pollInterval);
+                        setTimeout(() => loginBtn.click(), 500);
                     }
                 }
             }
-            // 场景 B: 分步登录 - 第一步
+            // 场景 2: 仅账号输入框存在 (分步登录 - 第一步)
             else if (isUserVisible && !isPassVisible) {
-                if (data.nextBtnSelector && userEl.value === data.username) {
+                // A. 填账号
+                if (!hasFilledUser) {
+                    triggerInputEvent(userEl, data.username);
+                    if (data.rememberMeSelector) {
+                        const remEl = getElementBySelector(data.rememberMeSelectorType, data.rememberMeSelector);
+                        if (remEl && remEl.offsetParent !== null && !remEl.checked) remEl.click();
+                    }
+                    hasFilledUser = true;
+                }
+
+                // B. 点击下一步
+                if (userEl.value === data.username && data.nextBtnSelector) {
                     const nextBtn = getElementBySelector(data.nextBtnSelectorType, data.nextBtnSelector);
-                    if (nextBtn) {
-                        clearInterval(loginInterval);
-                        setTimeout(() => nextBtn.click(), 500);
+                    if (nextBtn && nextBtn.offsetParent !== null) {
+                        // 这里不能清除 interval 因为还要等第二步出现
+                        // 但为了防止疯狂点击 可以重置 hasFilledUser 或等待页面刷新
+                        // 通常点击后页面会变 这里简单处理：点击后暂停一小会 或者依赖页面跳转
+                        // 建议：点击后不清除 等待 DOM 变化进入场景 3
+                        nextBtn.click();
+                        // 简单的防抖 防止一秒内点多次
+                        hasFilledUser = true;
                     }
                 }
             }
-            // 场景 C: 分步登录 - 第二步
+            // 场景 3: 仅密码输入框存在 (分步登录 - 第二步)
             else if (!isUserVisible && isPassVisible) {
-                if (passEl.value === data.password) {
-                    if (data.loginBtnSelector) {
-                        const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
-                        if (loginBtn) {
-                            clearInterval(loginInterval);
-                            setTimeout(() => loginBtn.click(), 500);
-                        }
+                // A. 填密码
+                if (!hasFilledPass) {
+                    triggerInputEvent(passEl, data.password);
+                    hasFilledPass = true;
+                }
+
+                // B. 点击登录
+                if (passEl.value === data.password && data.loginBtnSelector) {
+                    const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
+                    if (loginBtn && loginBtn.offsetParent !== null) {
+                        clearInterval(pollInterval);
+                        setTimeout(() => loginBtn.click(), 500);
                     }
                 }
             }
@@ -1137,11 +1131,8 @@
             const regex = new RegExp(data.urlPattern);
             if (regex.test(currentUrl) || regex.test(currentHostname)) {
 
-                // 1. 启动统一的登录轮询器 (处理账号、密码、下一步、登录)
-                pollForLogin(data);
-
-                // 2. 始终启动 2FA 轮询 (独立运行)
-                start2FAPolling(data);
+                // [修改] 仅调用统一轮询器 不再分别调用
+                startUnifiedPolling(data);
 
                 return; // 找到匹配配置后停止
             }

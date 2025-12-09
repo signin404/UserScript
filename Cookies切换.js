@@ -9,7 +9,7 @@
 // @grant        GM_setValue
 // @grant        GM_setClipboard
 // @run-at       document-idle
-// @version      1.3
+// @version      1.4
 // @author       Cheney & Gemini
 // @license      GPLv3
 // @icon      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAAAXNSR0IArs4c6QAAArlJREFUSEullktoE0EYx//ftEKxD2uVFitW8AH25AssKIiCvVQQsaAeeiiKBzWZRMylXmwvnipkZ6OUoniwh6BexMdBPYiIggcVRS1YwQdUbKWRIhLbuJ+d3abNdjfJNlmYw+73+H0z859vllDgYSlbAMQAVJNSxwv5FrORnwNHo/VgvgDmkzn2PlKqt1jCfHYPiKPRLbCsAQBtniDL2kuJxONSYC4Qh0IHIcRVAA2+yZiryDT/lgXiUKgZQjwBsN43EdFLMoztpUB0zNyMWMpLAE5lE70Zz+Dy6z8YaK9zPjGPkGluLAvEUnYAuJebpFaN2a89bdU411btmIgOk2HcLAVmz4ilvALAJV/PjLLZS4QRR6OrYFnvAdQvotIkgM+kVE/QGGIpTwNIBA3I8RsmpVqDxmmQlvOxoAE5fmkIsY7i8e9BYokjkadg3hXE2ccncLfQoHEwrywRpMM8MI7FGqm/35Ht7OMBfZ38Z5ta6ipc7NHfFtpvpbC2tgL3Oz26+QTmb7NHYA+EOEPxeHwhyLV0+vy0NlTiRZe7C32YyGDH0IRdwLvuFcUWYBjMnWSaWs0OnyORa2Duzn7YnZxAzRLhVzVejWXQtFSguUYUA2l7Gun0Ghoc/OmApNSt/3yQyCA+qbSF5VWuQvocUCi0CUK8BVAZJFEhn0O3f+Hhlyl7aRfs8dlsC7oOoKtc0IkHk3g2Oo2hjmXY2jhX9w9MT7c6oHB4P4julgvKE99LSvXNXxORSBLMRwrBFikGneoOKXXA3qPcxCwl5wMtUt46zSgptXpO3i5QOLwZRI9mmqynU0xOMfbdSGFbU+X8ZZivKqLnZBg7XQfWz7csyRPFyDAuLszr+7uVI5CjAPQoJv0MAL3HSTJN103tu3S+s3POmYZtmB3Z/4aPM0dixB6WlaREYriQkP4DhYT2pc+2+CQAAAAASUVORK5CYII=
@@ -36,39 +36,13 @@
   // 1. 获取统一的根域名作为存储Key
   const domain = getRootDomain(hostname);
 
-  // 2. 获取所有配置
-  let cookiesConfig = GM_getValue("cookiesConfig", {});
+  // 初始化为空 改为懒加载
+  let cookiesConfig = {};
 
-  // --- 兼容性处理开始：将子域名的配置迁移/合并到根域名 ---
-  let configChanged = false;
-  Object.keys(cookiesConfig).forEach(key => {
-    // 如果 key 不是当前根域名 但是是当前根域名的子域名 (例如 key是 pan.baidu.com domain是 baidu.com)
-    if (key !== domain && key.endsWith("." + domain)) {
-
-      // 确保根域名的数组存在
-      if (!cookiesConfig[domain]) {
-        cookiesConfig[domain] = [];
-      }
-
-      // 获取子域名的配置列表
-      const subConfigs = cookiesConfig[key];
-      if (Array.isArray(subConfigs) && subConfigs.length > 0) {
-        // 可选：为了防止混淆 可以在标题上标记来源 或者直接合并
-        // 这里选择直接合并 如果需要区分 用户可以在UI里改名
-        cookiesConfig[domain] = cookiesConfig[domain].concat(subConfigs);
-      }
-
-      // 合并后删除旧的子域名Key 避免重复和混乱
-      delete cookiesConfig[key];
-      configChanged = true;
-    }
-  });
-
-  // 如果发生了合并 保存更新后的配置
-  if (configChanged) {
-    GM_setValue("cookiesConfig", cookiesConfig);
+  // --- 修改：加载配置 (已删除兼容性处理逻辑) ---
+  function loadConfig() {
+    cookiesConfig = GM_getValue("cookiesConfig", {});
   }
-  // --- 兼容性处理结束 ---
 
   const mainClassName = `cookieSwitchWrapper_${randomStr()}`;
 
@@ -293,6 +267,15 @@
         function() { $(this).css("opacity", "0"); }  // 鼠标移开：恢复完全透明
       )
       .click(() => {
+        // --- 修改：点击时检查面板是否存在 不存在则初始化 ---
+        if ($(`.${mainClassName}`).length === 0) {
+            loadConfig(); // 1. 读取配置
+            const main = createMain(); // 2. 创建面板 DOM
+            $("body").append(main); // 3. 插入页面
+            refreshSettingsUI(LIVE_COOKIES_OPTION_VALUE); // 4. 填充数据
+        }
+
+        // 显示面板
         $(`.${mainClassName}`).css("transform", "translateX(0)");
         checkAndAdjustNameColumnWrap();
       });
@@ -626,12 +609,13 @@
   }
 
   function initPage() {
-    cookiesConfig = GM_getValue("cookiesConfig", {});
-    const main = createMain();
+
     const style = createStyle();
     const cookieBtn = createCookieBtn();
-    $("body").append(style, cookieBtn, main);
-    refreshSettingsUI(LIVE_COOKIES_OPTION_VALUE); // Default to live cookies on initial load
+
+    // 只添加样式和按钮
+    $("body").append(style, cookieBtn);
+
   }
 
   function saveCookie() {
