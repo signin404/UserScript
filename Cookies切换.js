@@ -8,7 +8,8 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_setClipboard
-// @version      1.1
+// @run-at       document-idle
+// @version      1.2
 // @author       Cheney & Gemini
 // @license      GPLv3
 // @icon      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAAAXNSR0IArs4c6QAAArlJREFUSEullktoE0EYx//ftEKxD2uVFitW8AH25AssKIiCvVQQsaAeeiiKBzWZRMylXmwvnipkZ6OUoniwh6BexMdBPYiIggcVRS1YwQdUbKWRIhLbuJ+d3abNdjfJNlmYw+73+H0z859vllDgYSlbAMQAVJNSxwv5FrORnwNHo/VgvgDmkzn2PlKqt1jCfHYPiKPRLbCsAQBtniDL2kuJxONSYC4Qh0IHIcRVAA2+yZiryDT/lgXiUKgZQjwBsN43EdFLMoztpUB0zNyMWMpLAE5lE70Zz+Dy6z8YaK9zPjGPkGluLAvEUnYAuJebpFaN2a89bdU411btmIgOk2HcLAVmz4ilvALAJV/PjLLZS4QRR6OrYFnvAdQvotIkgM+kVE/QGGIpTwNIBA3I8RsmpVqDxmmQlvOxoAE5fmkIsY7i8e9BYokjkadg3hXE2ccncLfQoHEwrywRpMM8MI7FGqm/35Ht7OMBfZ38Z5ta6ipc7NHfFtpvpbC2tgL3Oz26+QTmb7NHYA+EOEPxeHwhyLV0+vy0NlTiRZe7C32YyGDH0IRdwLvuFcUWYBjMnWSaWs0OnyORa2Duzn7YnZxAzRLhVzVejWXQtFSguUYUA2l7Gun0Ghoc/OmApNSt/3yQyCA+qbSF5VWuQvocUCi0CUK8BVAZJFEhn0O3f+Hhlyl7aRfs8dlsC7oOoKtc0IkHk3g2Oo2hjmXY2jhX9w9MT7c6oHB4P4julgvKE99LSvXNXxORSBLMRwrBFikGneoOKXXA3qPcxCwl5wMtUt46zSgptXpO3i5QOLwZRI9mmqynU0xOMfbdSGFbU+X8ZZivKqLnZBg7XQfWz7csyRPFyDAuLszr+7uVI5CjAPQoJv0MAL3HSTJN103tu3S+s3POmYZtmB3Z/4aPM0dixB6WlaREYriQkP4DhYT2pc+2+CQAAAAASUVORK5CYII=
@@ -17,12 +18,62 @@
 (function () {
   "use strict";
   const hostname = location.hostname;
-  const domain = hostname;
+
+  /**
+   * 获取根域名 (例如: pan.baidu.com -> baidu.com)
+   */
+  function getRootDomain(host) {
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return host;
+    const parts = host.split('.');
+    if (parts.length <= 2) return host;
+    const commonSLDs = ['com', 'net', 'org', 'edu', 'gov', 'co', 'ac', 'mil'];
+    if (parts.length > 2 && commonSLDs.includes(parts[parts.length - 2])) {
+      return parts.slice(-3).join('.');
+    }
+    return parts.slice(-2).join('.');
+  }
+
+  // 1. 获取统一的根域名作为存储Key
+  const domain = getRootDomain(hostname);
+
+  // 2. 获取所有配置
   let cookiesConfig = GM_getValue("cookiesConfig", {});
+
+  // --- 兼容性处理开始：将子域名的配置迁移/合并到根域名 ---
+  let configChanged = false;
+  Object.keys(cookiesConfig).forEach(key => {
+    // 如果 key 不是当前根域名 但是是当前根域名的子域名 (例如 key是 pan.baidu.com domain是 baidu.com)
+    if (key !== domain && key.endsWith("." + domain)) {
+
+      // 确保根域名的数组存在
+      if (!cookiesConfig[domain]) {
+        cookiesConfig[domain] = [];
+      }
+
+      // 获取子域名的配置列表
+      const subConfigs = cookiesConfig[key];
+      if (Array.isArray(subConfigs) && subConfigs.length > 0) {
+        // 可选：为了防止混淆 可以在标题上标记来源 或者直接合并
+        // 这里选择直接合并 如果需要区分 用户可以在UI里改名
+        cookiesConfig[domain] = cookiesConfig[domain].concat(subConfigs);
+      }
+
+      // 合并后删除旧的子域名Key 避免重复和混乱
+      delete cookiesConfig[key];
+      configChanged = true;
+    }
+  });
+
+  // 如果发生了合并 保存更新后的配置
+  if (configChanged) {
+    GM_setValue("cookiesConfig", cookiesConfig);
+  }
+  // --- 兼容性处理结束 ---
+
   const mainClassName = `cookieSwitchWrapper_${randomStr()}`;
 
   const LIVE_COOKIES_OPTION_VALUE = "__LIVE_COOKIES__";
-  const LIVE_COOKIES_OPTION_TEXT = "当前Cookie";
+  const LIVE_COOKIES_OPTION_TEXT = "当前";
 
   function randomStr() {
     const letters = "abcdefghijklmnopqrstuvwxyz";
@@ -35,6 +86,14 @@
 
   function closePannel() {
     $(`.${mainClassName}`).css("transform", "translateX(110%)");
+  }
+
+  function getSelectedDomain() {
+    const select = $(`.${mainClassName} .domain-select`);
+    if (select.length) {
+      return select.val();
+    }
+    return domain; // 这里的 domain 是脚本开头定义的当前页面根域名
   }
 
   /**
@@ -70,7 +129,11 @@
         box-sizing: border-box;
         transition: transform 200ms; transform: translateX(110%);
         background-color: #fff !important; color: #000 !important;
-        box-shadow: -10px 0 10px #ddd; overflow: auto;
+        box-shadow: -10px 0 10px #ddd;
+
+        /* --- 修改：强制显示垂直滚动条 防止布局跳动 --- */
+        overflow-y: scroll;
+        overflow-x: auto;
       }
       .${mainClassName} .topWrapper {
         display: flex; justify-content: space-between; align-items: center; margin-bottom:10px;
@@ -109,12 +172,18 @@
 
       /* --- 2. 固定删除按钮大小 --- */
       .${mainClassName} .delete-setting-btn {
-        width: 100px !important;
-        min-width: 100px !important;
         background-color: #ffdddd !important;
         border-color: #ffaaaa !important;
-        text-align: center !important;
-        padding: 0 !important;
+        color: #000 !important;
+        padding: 0 12px !important;
+      }
+
+      .${mainClassName} .delete-setting-btn.disabled {
+        background-color: #f0f0f0 !important;
+        border-color: #ddd !important;
+        color: #aaa !important;
+        cursor: not-allowed !important;
+        pointer-events: none !important;
       }
 
       /* --- 3. 固定关闭按钮大小 (位于顶部栏最后的按钮) --- */
@@ -192,8 +261,13 @@
         right: "10px", bottom: "40px", "z-index": 99999,
         cursor: "pointer", "user-select": "none",
         "box-shadow": "-4px 4px 8px #ddd", "border-radius": "50%",
-        opacity: "0.9",
+        opacity: "0", // 修改：平时完全透明 (100%透明度)
+        transition: "opacity 0.3s" // 新增：添加过渡动画
       })
+      .hover(
+        function() { $(this).css("opacity", "1"); }, // 鼠标悬浮：完全不透明 (0%透明度)
+        function() { $(this).css("opacity", "0"); }  // 鼠标移开：恢复完全透明
+      )
       .click(() => {
         $(`.${mainClassName}`).css("transform", "translateX(0)");
         checkAndAdjustNameColumnWrap();
@@ -201,171 +275,269 @@
     return cookieBtn;
   }
 
-  function updateDeleteButtonVisibility() {
+  function updateDeleteButtonState() {
     const selectedValue = $(`.${mainClassName} .title-select`).val();
     const deleteBtn = $(`.${mainClassName} .delete-setting-btn`);
-    if (selectedValue && selectedValue !== LIVE_COOKIES_OPTION_VALUE && cookiesConfig[domain] && cookiesConfig[domain].some(s => s.title === selectedValue)) {
-      deleteBtn.show();
+
+    // 如果选中的是 "当前Cookie" 或者没有选中值 则禁用按钮
+    if (!selectedValue || selectedValue === LIVE_COOKIES_OPTION_VALUE) {
+      deleteBtn.addClass('disabled');
     } else {
-      deleteBtn.hide();
+      // 否则启用按钮 (红色)
+      deleteBtn.removeClass('disabled');
     }
   }
 
   function refreshSettingsUI(selectThisValue = null) {
+    const targetDomain = getSelectedDomain();
     const titleSelect = $(`.${mainClassName} .title-select`);
     const titleInput = $(`.${mainClassName} .titleInput`);
+    const isCurrentPageDomain = (targetDomain === domain); // 判断是否是当前正在访问的域名
+
     titleSelect.empty();
 
-    // Always add Live Cookies option first
-    titleSelect.append($("<option>").val(LIVE_COOKIES_OPTION_VALUE).text(LIVE_COOKIES_OPTION_TEXT));
+    // 修改：只有在当前域名下 才显示 "当前Cookie" 选项
+    if (isCurrentPageDomain) {
+        titleSelect.append($("<option>").val(LIVE_COOKIES_OPTION_VALUE).text(LIVE_COOKIES_OPTION_TEXT));
+    }
 
-    // Add saved configurations
-    if (cookiesConfig[domain] && cookiesConfig[domain].length > 0) {
-      cookiesConfig[domain].forEach((item) => {
+    // 加载选中域名的配置
+    let hasSavedConfigs = false;
+    if (cookiesConfig[targetDomain] && cookiesConfig[targetDomain].length > 0) {
+      hasSavedConfigs = true;
+      cookiesConfig[targetDomain].forEach((item) => {
         titleSelect.append($("<option>").val(item.title).text(item.title));
       });
     }
 
-    let finalSelectedValue = selectThisValue || LIVE_COOKIES_OPTION_VALUE; // Default to live if nothing specific
+    let finalSelectedValue = selectThisValue;
 
-    // Ensure the value to select is actually in the dropdown
-    if (finalSelectedValue !== LIVE_COOKIES_OPTION_VALUE && (!cookiesConfig[domain] || !cookiesConfig[domain].some(s => s.title === finalSelectedValue))) {
-        finalSelectedValue = LIVE_COOKIES_OPTION_VALUE; // Fallback to live if requested saved config not found
+    // 确定默认选中项
+    if (!finalSelectedValue) {
+        if (isCurrentPageDomain) {
+            // 如果是当前域名 默认选 "当前Cookie"
+            finalSelectedValue = LIVE_COOKIES_OPTION_VALUE;
+        } else if (hasSavedConfigs) {
+            // 修改：如果是其他域名 默认选第一个已保存的配置
+            finalSelectedValue = cookiesConfig[targetDomain][0].title;
+        }
+    }
+
+    // 再次校验选中的值是否有效
+    const configExists = hasSavedConfigs && cookiesConfig[targetDomain].some(s => s.title === finalSelectedValue);
+
+    if (!isCurrentPageDomain && !configExists) {
+         // 如果在其他域名且找不到对应配置（比如刚删完） 清空
+         finalSelectedValue = "";
+    } else if (isCurrentPageDomain && finalSelectedValue !== LIVE_COOKIES_OPTION_VALUE && !configExists) {
+         finalSelectedValue = LIVE_COOKIES_OPTION_VALUE;
     }
 
     titleSelect.val(finalSelectedValue);
 
-    if (finalSelectedValue === LIVE_COOKIES_OPTION_VALUE) {
-      titleInput.val(""); // Clear input, ready for new name if user wants to save live state
-      GM_cookie.list({}, function (cookies, error) {
+    // 根据选中项渲染表格
+    if (finalSelectedValue === LIVE_COOKIES_OPTION_VALUE && isCurrentPageDomain) {
+      titleInput.val("");
+      GM_cookie.list({ domain: targetDomain }, function (cookies, error) {
         if (!error) {
           fillTable(cookies);
         } else {
-          $(`.${mainClassName} tbody`).html("<tr><td colspan='10'>无法加载当前Cookie</td></tr>");
+          $(`.${mainClassName} tbody`).html("<tr><td colspan='10'>无法加载该域名的Cookie</td></tr>");
         }
       });
-    } else { // A saved configuration is selected
-      titleInput.val(finalSelectedValue); // Set input to the name of the saved config
-      const setting = cookiesConfig[domain].find(s => s.title === finalSelectedValue);
+    } else if (finalSelectedValue) {
+      titleInput.val(finalSelectedValue);
+      const setting = cookiesConfig[targetDomain].find(s => s.title === finalSelectedValue);
       fillTable(setting?.cookies);
+    } else {
+      // 既不是当前Cookie 也没有保存的配置（例如其他域名无配置时）
+      titleInput.val("");
+      $(`.${mainClassName} tbody`).html("<tr><td colspan='10'>该域名下没有已保存的配置</td></tr>");
     }
-    updateDeleteButtonVisibility();
+
+    updateDeleteButtonState();
   }
 
 
   function handleDeleteCurrentSetting() {
+    const targetDomain = getSelectedDomain();
     const titleToDelete = $(`.${mainClassName} .title-select`).val();
-    if (!titleToDelete || titleToDelete === LIVE_COOKIES_OPTION_VALUE || !cookiesConfig[domain] || !cookiesConfig[domain].find(s => s.title === titleToDelete)) {
-      alert("没有有效配置可删除");
+
+    // 校验逻辑...
+    if (!titleToDelete || titleToDelete === LIVE_COOKIES_OPTION_VALUE || !cookiesConfig[targetDomain]) {
       return;
     }
 
     {
-      cookiesConfig[domain] = cookiesConfig[domain].filter(item => item.title !== titleToDelete);
-      if (cookiesConfig[domain].length === 0) {
-        delete cookiesConfig[domain];
+      // 删除指定配置
+      cookiesConfig[targetDomain] = cookiesConfig[targetDomain].filter(item => item.title !== titleToDelete);
+
+      // 检查该域名下是否还有配置
+      if (cookiesConfig[targetDomain].length === 0) {
+        delete cookiesConfig[targetDomain]; // 删除空域名 Key
+        GM_setValue("cookiesConfig", cookiesConfig);
+
+        // 修改：刷新域名列表 (移除已空的域名)
+        refreshDomainListUI();
+
+        // 修改：如果删除的是其他域名 且该域名已无配置 自动切回当前域名
+        if (targetDomain !== domain) {
+            $(`.${mainClassName} .domain-select`).val(domain);
+            refreshSettingsUI(LIVE_COOKIES_OPTION_VALUE);
+        } else {
+            // 如果是当前域名 切回 Live Cookies
+            refreshSettingsUI(LIVE_COOKIES_OPTION_VALUE);
+        }
+      } else {
+        // 该域名下还有其他配置
+        GM_setValue("cookiesConfig", cookiesConfig);
+        // 刷新UI refreshSettingsUI 会自动处理默认选中第一个配置的逻辑
+        refreshSettingsUI();
       }
-      GM_setValue("cookiesConfig", cookiesConfig);
-      refreshSettingsUI(LIVE_COOKIES_OPTION_VALUE); // Refresh and select live cookies
+    }
+  }
+
+  // 新增：刷新域名选择框的列表
+  function refreshDomainListUI() {
+    const domainSelect = $(`.${mainClassName} .domain-select`);
+    if (!domainSelect.length) return;
+
+    const currentSelection = domainSelect.val(); // 记录当前选中的值
+    domainSelect.empty();
+
+    // 1. 获取除当前域名外的所有已保存域名
+    let otherDomains = Object.keys(cookiesConfig).filter(d => d !== domain);
+
+    // 2. 对其他域名进行字母排序
+    otherDomains.sort();
+
+    // 3. 构建最终列表：当前域名始终排在第一位
+    const allDomains = [domain, ...otherDomains];
+
+    allDomains.forEach(d => {
+        const option = $("<option>").val(d).text(d);
+
+        // --- 修改：如果是当前域名 添加特殊背景色和加粗 ---
+        if (d === domain) {
+            option.css({
+                "background-color": "#e6f7ff", // 浅蓝色背景
+                "font-weight": "bold",         // 加粗
+                "color": "#000"                // 确保文字颜色
+            });
+        }
+
+        domainSelect.append(option);
+    });
+
+    // 尝试恢复之前的选择
+    if (currentSelection && allDomains.includes(currentSelection)) {
+        domainSelect.val(currentSelection);
+    } else {
+        domainSelect.val(domain);
     }
   }
 
   function createMain() {
+    // --- 1. 创建域名选择框 ---
+    const domainSelect = $("<select class='domain-select'>");
+
+    // 这里的初始化逻辑移到了 refreshDomainListUI 稍后调用
+
+    // 当域名切换时 刷新配置列表
+    domainSelect.change(() => {
+        // 切换域名时 不传参数 让 refreshSettingsUI 自动决定默认选中项(第一个配置)
+        refreshSettingsUI();
+    });
+
+    // ... (中间代码保持不变: titleSelect, titleInput, deleteSettingBtn 等) ...
     const titleSelect = $("<select class='title-select'>");
     const titleInput = $("<input class='titleInput' placeholder='输入新配置名称' />");
-    const deleteSettingBtn = $("<button class='delete-setting-btn'>删除配置</button>")
-      .click(handleDeleteCurrentSetting)
-      .hide();
+    const deleteSettingBtn = $("<button class='delete-setting-btn'>删除配置</button>").click(handleDeleteCurrentSetting);
 
     titleSelect.change((e) => {
-      const selectedValue = $(e.target).val();
-      refreshSettingsUI(selectedValue); // Let refreshSettingsUI handle loading and input field
+      refreshSettingsUI($(e.target).val());
     });
 
     titleInput.change((e) => {
+        // ... (保持不变) ...
         const currentTypedTitle = $(e.target).val().trim();
         const titleSelectElement = $(`.${mainClassName} .title-select`);
+        const targetDomain = getSelectedDomain();
 
-        if (currentTypedTitle === "") { // If input is cleared
-            if (titleSelectElement.val() !== LIVE_COOKIES_OPTION_VALUE) {
-                // If not already on live, switch to live view
+        if (currentTypedTitle === "") {
+            if (titleSelectElement.val() !== LIVE_COOKIES_OPTION_VALUE && targetDomain === domain) {
                 refreshSettingsUI(LIVE_COOKIES_OPTION_VALUE);
             }
-        } else if (cookiesConfig[domain] && cookiesConfig[domain].some(item => item.title === currentTypedTitle)) {
-            // If typed name matches an existing saved config, select it
+        } else if (cookiesConfig[targetDomain] && cookiesConfig[targetDomain].some(item => item.title === currentTypedTitle)) {
             if (titleSelectElement.val() !== currentTypedTitle) {
                  refreshSettingsUI(currentTypedTitle);
             }
         }
     });
 
-    const addBtn = $("<button>新增</button>").click(() => {
-      const deleteRowBtn = $("<button>删除</button>").click(function () {
-        if (confirm(`确认删除此行吗?`)) {
-            $(this).closest("tr").remove();
-            checkAndAdjustNameColumnWrap();
-        }
-      });
-      const deleteTd = $("<td>").append(deleteRowBtn);
-      const tr = $("<tr class='cookie-row'>").append(
-        `<td class="editable cookie-name"></td><td class="editable cookie-value"></td><td class="editable">${domain}</td><td class="editable">/</td><td class="editable"></td><td></td><td class="editable">false</td><td class="editable">false</td><td class="editable">Lax</td>`,
-        deleteTd
-      );
-      $(`.${mainClassName} tbody`).append(tr);
-      checkAndAdjustNameColumnWrap();
+    // ... (按钮定义保持不变: addBtn, saveBtn, applyBtn 等) ...
+    const addBtn = $("<button>新增</button>").click(() => { /*...*/
+        // 注意：addBtn 内部逻辑保持不变
+        const deleteRowBtn = $("<button>删除</button>").click(function () {
+            if (confirm(`确认删除此行吗?`)) {
+                $(this).closest("tr").remove();
+                checkAndAdjustNameColumnWrap();
+            }
+        });
+        const deleteTd = $("<td>").append(deleteRowBtn);
+        const currentTargetDomain = getSelectedDomain();
+        const tr = $("<tr class='cookie-row'>").append(
+            `<td class="editable cookie-name"></td><td class="editable cookie-value"></td><td class="editable">${currentTargetDomain}</td><td class="editable">/</td><td class="editable"></td><td></td><td class="editable">false</td><td class="editable">false</td><td class="editable">Lax</td>`,
+            deleteTd
+        );
+        $(`.${mainClassName} tbody`).append(tr);
+        checkAndAdjustNameColumnWrap();
     });
 
     const saveBtn = $("<button>保存</button>").click(() => {
       const currentTitle = $(`.${mainClassName} .titleInput`).val().trim();
-      const savedCookies = saveCookie(); // saveCookie now handles title validation
+      const savedCookies = saveCookie();
       if (savedCookies) {
-        refreshSettingsUI(currentTitle); // Refresh and reselect the saved/updated title
+        // 保存后 可能新增了域名 需要刷新域名列表
+        refreshDomainListUI();
+        // 重新选中刚才保存的域名(因为 refreshDomainListUI 可能会重置选择)
+        const targetDomain = savedCookies[0].domain; // 简单获取一下
+        // 实际上 getSelectedDomain() 还是原来的 所以直接刷新UI即可
+        refreshSettingsUI(currentTitle);
       }
     });
 
-    const applyBtn = $("<button>保存并导入</button>").click(() => {
-      applyCookie();
-    });
-
-    const copyBtn = $("<button>复制</button>").click(() => {
-        copyCookiesToClipboard();
-    });
-
+    const applyBtn = $("<button>保存并导入</button>").click(() => applyCookie());
+    const copyBtn = $("<button>复制</button>").click(() => copyCookiesToClipboard());
     const closeBtn = $("<button>关闭</button>").click(closePannel);
 
     const topButtonGroup = $("<div class='topButtonGroup'></div>").append(
-      addBtn,
-      saveBtn,
-      applyBtn,
-      copyBtn,
-      closeBtn
+      deleteSettingBtn, addBtn, saveBtn, applyBtn, copyBtn, closeBtn
     );
 
     const topDiv = $("<div class='topWrapper'>").append(
-      `<span>当前域名: ${domain}</span>`,
+      domainSelect,
       titleSelect,
-      deleteSettingBtn,
       titleInput,
       topButtonGroup
     );
 
+    // ... (表格创建代码保持不变) ...
     const cookieTable = $("<table class='cookieTable'></table>")
       .append(
         `<thead><tr><th>Name</th><th>Value</th><th>Domain</th><th>Path</th><th>Expires/Max-Age</th><th>Size</th><th>HttpOnly</th><th>Secure</th><th>SameSite</th><th>操作</th></tr></thead>`,
         `<tbody></tbody>`
       )
       .on("click", ".editable:not(.editing)", function (event) {
-        const td = $(this);
+          // ... (表格编辑逻辑保持不变) ...
+           const td = $(this);
         td.addClass("editing");
         const originalText = td.text();
         const textarea = $("<textarea />").val(originalText);
-
-        // Function to auto-resize textarea
         const autoResize = (el) => {
             el.style.height = 'auto';
             el.style.height = el.scrollHeight + 'px';
         };
-
         textarea.blur(() => {
           td.removeClass("editing");
           td.text(textarea.val());
@@ -382,11 +554,37 @@
         }).on('input', function() {
             autoResize(this);
         });
-
         td.html(textarea);
-        autoResize(textarea[0]); // Set initial size
+        autoResize(textarea[0]);
         textarea.focus();
       });
+
+    // 创建完DOM后 初始化域名列表
+    // 注意：这里需要先把元素 append 到 div 后 或者直接操作 domainSelect 变量
+    // 由于 refreshDomainListUI 依赖于 DOM 中存在 .domain-select 我们需要先返回结构
+    // 或者稍微修改 refreshDomainListUI 接受参数
+    // 最简单的方法是：在 initPage 中调用 refreshDomainListUI 或者在这里手动调用一次填充逻辑
+
+    // 手动填充一次 避免时序问题
+    let otherDomains = Object.keys(cookiesConfig).filter(d => d !== domain);
+    otherDomains.sort();
+    const allDomains = [domain, ...otherDomains];
+
+    allDomains.forEach(d => {
+        const option = $("<option>").val(d).text(d);
+
+        // 如果是当前域名 添加特殊背景色和加粗
+        if (d === domain) {
+            option.css({
+                "background-color": "rgb(100, 100, 100)",
+                "color": "#fff"
+            });
+        }
+
+        domainSelect.append(option);
+    });
+
+    domainSelect.val(domain);
 
     return $(`<div class='${mainClassName}'></div>`).append(topDiv, cookieTable);
   }
@@ -401,7 +599,9 @@
   }
 
   function saveCookie() {
+    const targetDomain = getSelectedDomain(); // 获取目标域名
     const title = $(`.${mainClassName} .titleInput`).val().trim();
+
     if (!title) {
       alert("请输入配置名称");
       return undefined;
@@ -426,7 +626,8 @@
 
       cookies.push({
         name: name, value: tds.eq(1).text(),
-        domain: tds.eq(2).text().trim() || domain,
+        // 如果表格里是空的 使用目标域名
+        domain: tds.eq(2).text().trim() || targetDomain,
         path: tds.eq(3).text().trim() || "/",
         expirationDate: expirationDate,
         httpOnly: tds.eq(6).text().trim().toLowerCase() === 'true',
@@ -435,27 +636,24 @@
       });
     });
 
-    if (!cookiesConfig[domain]) cookiesConfig[domain] = [];
-    const existingSettingIndex = cookiesConfig[domain].findIndex(item => item.title === title);
+    if (!cookiesConfig[targetDomain]) cookiesConfig[targetDomain] = [];
+    const existingSettingIndex = cookiesConfig[targetDomain].findIndex(item => item.title === title);
     if (existingSettingIndex > -1) {
-      cookiesConfig[domain][existingSettingIndex].cookies = cookies;
+      cookiesConfig[targetDomain][existingSettingIndex].cookies = cookies;
     } else {
-      cookiesConfig[domain].push({ title, cookies });
+      cookiesConfig[targetDomain].push({ title, cookies });
     }
     GM_setValue("cookiesConfig", cookiesConfig);
     return cookies;
   }
 
   function applyCookie() {
-    const currentTitle = $(`.${mainClassName} .titleInput`).val().trim();
-    const cookiesToApply = saveCookie(); // This also saves the configuration.
-    if (!cookiesToApply) {
-        // saveCookie already showed an alert if there was a problem (e.g., no title).
-        return;
-    }
+    const targetDomain = getSelectedDomain(); // 获取目标域名
+    const cookiesToApply = saveCookie();
+    if (!cookiesToApply) return;
 
-    // 1. Get all existing cookies that the script can access.
-    GM_cookie.list({}, function(existingCookies, error) {
+    // 1. 获取目标域名的现有Cookie
+    GM_cookie.list({ domain: targetDomain }, function(existingCookies, error) {
         if (error) {
             alert('获取现有Cookie列表失败');
             return;
@@ -464,7 +662,6 @@
         let deletedCount = 0;
         const totalToDelete = existingCookies.length;
 
-        // This function will be called after all existing cookies are deleted.
         const setNewCookies = () => {
             let successCount = 0;
             let errorCount = 0;
@@ -472,18 +669,24 @@
 
             if (totalToSet === 0) {
                 alert("所有现有Cookie已被清除");
-                closePannel();
-                location.reload();
+                // 如果操作的是当前页面域名 刷新页面；否则只关闭面板
+                if (targetDomain === domain) {
+                    closePannel();
+                    location.reload();
+                } else {
+                    alert(`域名 ${targetDomain} 的Cookie已更新`);
+                    closePannel();
+                }
                 return;
             }
 
             cookiesToApply.forEach((cookie) => {
                 const cookieDetails = { ...cookie };
-                // Prepare cookie details for setting
                 if (cookieDetails.expirationDate === undefined || isNaN(cookieDetails.expirationDate)) {
-                    delete cookieDetails.expirationDate; // For session cookies
+                    delete cookieDetails.expirationDate;
                 }
-                if (!cookieDetails.domain) cookieDetails.domain = domain;
+                // 确保设置到正确的域名
+                if (!cookieDetails.domain) cookieDetails.domain = targetDomain;
                 if (!cookieDetails.path) cookieDetails.path = "/";
 
                 GM_cookie.set(cookieDetails, function (setError) {
@@ -492,29 +695,27 @@
                     } else {
                         successCount++;
                     }
-                    // Check if all new cookies have been processed
                     if (successCount + errorCount === totalToSet) {
-                        closePannel();
-                        location.reload();
+                        if (targetDomain === domain) {
+                            closePannel();
+                            location.reload();
+                        } else {
+                            alert(`域名 ${targetDomain} 的Cookie已更新`);
+                            closePannel();
+                        }
                     }
                 });
             });
         };
 
-        // 2. If there are no existing cookies, go straight to setting new ones.
         if (totalToDelete === 0) {
             setNewCookies();
             return;
         }
 
-        // 3. Delete each existing cookie.
         existingCookies.forEach(cookie => {
-            // Use the specific details from the listed cookie to ensure correct deletion.
             GM_cookie.delete({ name: cookie.name, domain: cookie.domain, path: cookie.path }, function(deleteError) {
-                if (deleteError) {
-                }
                 deletedCount++;
-                // 4. After all deletions are attempted, proceed to set the new cookies.
                 if (deletedCount === totalToDelete) {
                     setNewCookies();
                 }

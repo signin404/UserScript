@@ -12,7 +12,7 @@
 // @grant        GM_addStyle
 // @grant        GM_notification
 // @run-at       document-idle
-// @version      12.6
+// @version      12.7
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyLjYxNCAzLjQxNEMyOC4zMS0uODkgMjEuMzMyLS44OSAxNy4wMjcgMy40MTRjLTMuMzkxIDMuMzkyLTQuMDk4IDguNDM5LTIuMTQ0IDEyLjUzNWwtMy45MTYgMy45MTVhMi40NCAyLjQ0IDAgMCAwLS42MjUgMi4zNTlsLTEuOTczIDEuOTcyYTEuMjIgMS4yMiAwIDAgMC0xLjczMSAwbC0xLjczMSAxLjczMmExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMybC0uODY3Ljg2NGExLjIyNCAxLjIyNCAwIDAgMC0xLjczMSAwbC0uODY2Ljg2N2ExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMyYy4wMTUuMDE2LjAzNi4wMi4wNTEuMDMzYTMuMDYyIDMuMDYyIDAgMCAwIDQuNzExIDMuODYzTDIwLjA4IDIxLjE0NGM0LjA5NyAxLjk1NSA5LjE0NCAxLjI0NyAxMi41MzUtMi4xNDYgNC4zMDItNC4zMDIgNC4zMDItMTEuMjgtLjAwMS0xNS41ODRtLTEuNzMxIDUuMTk1YTIuNDUgMi40NSAwIDAgMS0zLjQ2NC0zLjQ2NCAyLjQ1IDIuNDUgMCAwIDEgMy40NjQgMy40NjQiLz48L3N2Zz4=
@@ -128,7 +128,7 @@
     function findOptimalClickTarget(element) {
         let currentEl = element;
         const interactiveTags = ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'SUMMARY', 'DETAILS'];
-        const goodClassKeywords = ['btn', 'button', 'link', 'icon', 'item', 'action', 'nav', 'j-', 'js-', 'wrapper', 'container', 'submit', 'login', 'next'];
+        const goodClassKeywords = ['btn', 'button', 'link', 'icon', 'item', 'action', 'nav', 'j-', 'js-', 'wrapper', 'container', 'submit', 'login', 'next', 'checkbox'];
 
         while (currentEl && currentEl.tagName !== 'BODY') {
             if (currentEl.id && currentEl.ownerDocument.querySelectorAll('#' + CSS.escape(currentEl.id)).length === 1) return currentEl;
@@ -359,6 +359,20 @@
         }
         .totp-pick-btn:hover { background: #666; }
 
+        /* Auto-fill Toggle Button */
+        .totp-toggle-btn {
+            cursor: pointer; border: none; padding: 0 8px; font-size: 11px !important;
+            white-space: nowrap; border-radius: 0 !important;
+            display: flex !important; justify-content: center !important; align-items: center !important;
+            line-height: normal !important; margin: 0 !important;
+            height: 28px !important; width: 100%;
+            color: white; font-weight: bold; transition: background 0.2s;
+        }
+        .totp-toggle-on { background-color: #007bff; }
+        .totp-toggle-on:hover { background-color: #0056b3; }
+        .totp-toggle-off { background-color: #dc3545; }
+        .totp-toggle-off:hover { background-color: #c82333; }
+
         /* Modal Buttons */
         .totp-modal-btns { display: flex; justify-content: space-between; margin-top: 5px; gap: 10px; }
         .totp-modal-btn {
@@ -408,9 +422,13 @@
     modalOverlay.innerHTML = `
         <div id="totp-modal">
 
-            <!-- Top Row: Name & URL -->
+            <!-- Top Row: Auto-fill Toggle | Name | URL -->
             <div class="totp-row totp-form-group">
-                <div style="flex: 0 0 40%;">
+                <div style="flex: 0 0 20%;">
+                    <button id="totp-toggle-autofill" class="totp-toggle-btn totp-toggle-off">自动填写</button>
+                    <input type="checkbox" id="totp-input-autofill" style="display:none;">
+                </div>
+                <div style="flex: 0 0 30%;">
                     <input type="text" id="totp-input-name" placeholder="配置名称">
                 </div>
                 <div style="flex: 1;">
@@ -448,11 +466,13 @@
                     </div>
                 </div>
 
-                <!-- Row 3: Login Button & Auto-fill Checkbox -->
+                <!-- Row 3: Remember Me Type/Pick | Next Button -->
                 <div class="totp-row totp-form-group">
-                    <div class="totp-col-left" style="display:flex; align-items:center; justify-content:center;">
-                        <input type="checkbox" id="totp-input-autofill" style="width:auto !important; height:auto !important; margin-right:5px; cursor:pointer;">
-                        <label for="totp-input-autofill" style="margin:0; cursor:pointer; color:#4dabf7; font-weight:bold; font-size:12px;">启用自动填写</label>
+                    <div class="totp-col-left">
+                        <div class="totp-input-group">
+                            <select id="totp-rem-sel-type" style="width: 60px;"><option value="css">CSS</option><option value="xpath">XPath</option></select>
+                            <button class="totp-pick-btn" id="totp-pick-rem-sel" style="flex:1;">选择</button>
+                        </div>
                     </div>
                     <div class="totp-col-right">
                         <div class="totp-input-group">
@@ -463,9 +483,10 @@
                     </div>
                 </div>
 
-                <!-- Row 4: Empty & Login Button -->
+                <!-- Row 4: Remember Me Input | Login Button -->
                 <div class="totp-row totp-form-group">
-                    <div class="totp-col-left" style="display:flex; align-items:center; justify-content:center; color:#666; font-size:11px;">
+                    <div class="totp-col-left">
+                        <input type="text" id="totp-rem-selector" placeholder="记住登录勾选框">
                     </div>
                     <div class="totp-col-right">
                         <div class="totp-input-group">
@@ -526,6 +547,7 @@
     // Modal Elements
     const inputName = document.getElementById('totp-input-name');
     const inputAutoFill = document.getElementById('totp-input-autofill');
+    const toggleAutoFill = document.getElementById('totp-toggle-autofill');
     const inputUrl = document.getElementById('totp-input-url');
 
     // Account Inputs
@@ -539,6 +561,8 @@
     const nextBtnSelType = document.getElementById('totp-next-btn-sel-type');
     const loginBtnSelector = document.getElementById('totp-login-btn-selector');
     const loginBtnSelType = document.getElementById('totp-login-btn-sel-type');
+    const remSelector = document.getElementById('totp-rem-selector');
+    const remSelType = document.getElementById('totp-rem-sel-type');
 
     // 2FA Inputs
     const inputSecret = document.getElementById('totp-input-secret');
@@ -553,6 +577,7 @@
     const btnPickPass = document.getElementById('totp-pick-pass-sel');
     const btnPickNextBtn = document.getElementById('totp-pick-next-btn');
     const btnPickLoginBtn = document.getElementById('totp-pick-login-btn');
+    const btnPickRem = document.getElementById('totp-pick-rem-sel');
     const btnPickInput = document.getElementById('totp-pick-input');
     const btnPickBtn = document.getElementById('totp-pick-btn');
 
@@ -587,6 +612,8 @@
                     nextBtnSelectorType: data.nextBtnSelectorType || 'css',
                     loginBtnSelector: data.loginBtnSelector || '',
                     loginBtnSelectorType: data.loginBtnSelectorType || 'css',
+                    rememberMeSelector: data.rememberMeSelector || '',
+                    rememberMeSelectorType: data.rememberMeSelectorType || 'css',
 
                     // 2FA Info
                     inputSelector: data.inputSelector || '',
@@ -816,6 +843,18 @@
 
     // --- Modal Logic ---
 
+    function updateToggleBtn() {
+        if (inputAutoFill.checked) {
+            toggleAutoFill.textContent = "自动填写: 开";
+            toggleAutoFill.classList.remove('totp-toggle-off');
+            toggleAutoFill.classList.add('totp-toggle-on');
+        } else {
+            toggleAutoFill.textContent = "自动填写: 关";
+            toggleAutoFill.classList.remove('totp-toggle-on');
+            toggleAutoFill.classList.add('totp-toggle-off');
+        }
+    }
+
     function openModal(name = '', data = null) {
         editingKey = name || null;
 
@@ -823,6 +862,8 @@
 
         // Auto-fill fields
         inputAutoFill.checked = data ? data.autoFill : false;
+        updateToggleBtn();
+
         inputUrl.value = data ? data.urlPattern : window.location.hostname.replace(/^www\./, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
         // Account
@@ -836,6 +877,8 @@
         nextBtnSelType.value = data ? data.nextBtnSelectorType : 'css';
         loginBtnSelector.value = data ? data.loginBtnSelector : '';
         loginBtnSelType.value = data ? data.loginBtnSelectorType : 'css';
+        remSelector.value = data ? data.rememberMeSelector : '';
+        remSelType.value = data ? data.rememberMeSelectorType : 'css';
 
         // 2FA
         inputSecret.value = data ? data.secret : '';
@@ -885,6 +928,8 @@
             nextBtnSelectorType: nextBtnSelType.value,
             loginBtnSelector: loginBtnSelector.value.trim(),
             loginBtnSelectorType: loginBtnSelType.value,
+            rememberMeSelector: remSelector.value.trim(),
+            rememberMeSelectorType: remSelType.value,
 
             inputSelector: inputSelector.value.trim(),
             inputSelectorType: inputSelType.value,
@@ -959,6 +1004,14 @@
             // --- 自动填写逻辑 (只要看见了就填) ---
             if (isUserVisible && userEl.value !== data.username) {
                 triggerInputEvent(userEl, data.username);
+
+                // [新增] 填写完账号后 尝试点击记住登录
+                if (data.rememberMeSelector) {
+                    const remEl = getElementBySelector(data.rememberMeSelectorType, data.rememberMeSelector);
+                    if (remEl && !remEl.checked) {
+                        remEl.click();
+                    }
+                }
             }
             if (isPassVisible && passEl.value !== data.password) {
                 triggerInputEvent(passEl, data.password);
@@ -1062,6 +1115,8 @@
 
     // --- Event Listeners ---
 
+    GM_registerMenuCommand("显示验证器", toggleContainer);
+
     // [新增] 阻止脚本界面的事件冒泡到网页 (防止点击脚本导致网页菜单关闭)
     function stopPropagation(e) {
         e.stopPropagation();
@@ -1073,11 +1128,15 @@
         });
     });
 
-    GM_registerMenuCommand("显示验证器", toggleContainer);
-
     // 密码框聚焦时显示明文 失焦时隐藏
     inputPassword.addEventListener('focus', () => { inputPassword.type = 'text'; });
     inputPassword.addEventListener('blur', () => { inputPassword.type = 'password'; });
+
+    // 自动填写开关按钮
+    toggleAutoFill.addEventListener('click', () => {
+        inputAutoFill.checked = !inputAutoFill.checked;
+        updateToggleBtn();
+    });
 
     closeBtn.addEventListener('click', hideContainer);
     addBtn.addEventListener('click', () => openModal());
@@ -1091,6 +1150,7 @@
     btnPickPass.addEventListener('click', () => startSelectionMode('totp-pass-selector', 'totp-pass-sel-type'));
     btnPickNextBtn.addEventListener('click', () => startSelectionMode('totp-next-btn-selector', 'totp-next-btn-sel-type'));
     btnPickLoginBtn.addEventListener('click', () => startSelectionMode('totp-login-btn-selector', 'totp-login-btn-sel-type'));
+    btnPickRem.addEventListener('click', () => startSelectionMode('totp-rem-selector', 'totp-rem-sel-type'));
 
     // Pick Buttons - 2FA
     btnPickInput.addEventListener('click', () => startSelectionMode('totp-input-selector', 'totp-input-sel-type'));
