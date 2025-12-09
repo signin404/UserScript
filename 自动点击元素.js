@@ -887,7 +887,7 @@ class ClickTaskManager {
             // 在 Shadow DOM 中寻找高优先级的交互元素
             // 这里增加了 [role="button"] 和 tabindex 支持 以覆盖更多自定义组件
             const internal = current.shadowRoot.querySelector('input, textarea, button, a, select, [role="button"], [tabindex]:not([tabindex="-1"])');
-            
+
             if (internal) {
                 current = internal; // 深入一层 将当前焦点移交给内部元素
                 depth++;

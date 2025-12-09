@@ -129,15 +129,15 @@
         box-sizing: border-box;
         transition: transform 200ms; transform: translateX(110%);
         background-color: #fff !important; color: #000 !important;
-        box-shadow: -10px 0 10px #ddd; 
-        
+        box-shadow: -10px 0 10px #ddd;
+
         /* 强制显示垂直滚动条 */
-        overflow-y: scroll; 
+        overflow-y: scroll;
         overflow-x: auto;
-        
+
         /* --- 新增：阻止滚动链接/穿透 --- */
         /* 这会让滚动事件被限制在当前容器内 不会传递给网页背景 */
-        overscroll-behavior: contain; 
+        overscroll-behavior: contain;
       }
       .${mainClassName} .topWrapper {
         display: flex; justify-content: space-between; align-items: center; margin-bottom:10px;
@@ -207,30 +207,30 @@
       }
 
       .${mainClassName} .cookieTable { width: 100%; margin-top: 15px; border-collapse: collapse; }
-      
+
       /* 强制重置 thead 样式 */
-      .${mainClassName} .cookieTable thead { 
-          background: #f0f0f0 !important; 
+      .${mainClassName} .cookieTable thead {
+          background: #f0f0f0 !important;
           background-color: #f0f0f0 !important;
           background-image: none !important;
           color: #000 !important;
       }
-      
+
       .${mainClassName} .cookieTable th, .${mainClassName} .cookieTable td {
         font-size: 12px; padding: 6px; text-align: center;
         border: 1px solid #ddd !important;
         color: #000 !important;
       }
-      
+
       /* --- 修改：固定表头背景色并吸顶 --- */
-      .${mainClassName} .cookieTable th { 
-        font-size: 13px; 
-        white-space: nowrap; 
-        
+      .${mainClassName} .cookieTable th {
+        font-size: 13px;
+        white-space: nowrap;
+
         /* 使用 background 简写覆盖 image/gradient 并强制不透明 */
-        background: #e9e9e9 !important; 
+        background: #e9e9e9 !important;
         background-color: #e9e9e9 !important;
-        background-image: none !important; 
+        background-image: none !important;
         color: #000 !important;
         position: static !important;
       }
@@ -617,7 +617,7 @@
     // 防止在面板内的点击、按键等事件冒泡到网页 导致触发网页快捷键或关闭视频等
     const containerEl = $container[0]; // 获取原生 DOM 元素
     const stopPropagation = (e) => e.stopPropagation();
-    
+
     ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
         containerEl.addEventListener(evtName, stopPropagation, false);
     });

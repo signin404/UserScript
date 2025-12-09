@@ -764,28 +764,28 @@
 
   function initSharedButton() {
       if (sharedButton) return;
-      
+
       sharedButton = document.createElement('button');
       sharedButton.className = 'bmn-floating-button';
       sharedButton.type = 'button';
       sharedButton.title = '获取共享账号';
       sharedButton.innerHTML = icons.mail;
-      
+
       // [新增] 事件隔离：防止事件冒泡
       ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
           sharedButton.addEventListener(evtName, function(e) {
               e.stopPropagation();
           }, false);
       });
-      
+
       sharedButton.onmousedown = function(e) {
-          e.preventDefault(); 
+          e.preventDefault();
       };
 
       sharedButton.onclick = function(e) {
           e.preventDefault();
           e.stopPropagation();
-          
+
           if (currentTargetInput) {
               const passwordInput = currentTargetInput._bmnPasswordEl;
               const data = {
@@ -918,7 +918,7 @@
   function checkAndEventToInput() {
       // 获取页面上所有的 input (包含 Shadow DOM 中的)
       const allInputs = queryAllInputs(document);
-      
+
       // 过滤出所有密码框
       const passwordInputs = allInputs.filter(el => el.type === 'password' && !el.dataset.bmnChecked);
 
@@ -931,7 +931,7 @@
           const currentRoot = passwordInput.getRootNode();
 
           // --- 策略 1: 尝试在同一个 Shadow Root/Document 下查找 (原有逻辑) ---
-          
+
           // 1.1 查找紧邻的前一个输入框
           let siblingCandidate = passwordInput.previousElementSibling;
           for (let i = 0; i < 3 && siblingCandidate; i++) {
@@ -948,7 +948,7 @@
               const potentialInputsInRoot = Array.from(currentRoot.querySelectorAll(
                   'input:not([type]), input[type=text], input[type=email], input[type=tel], input[type=password]'
               ));
-              
+
               const passwordDomIndex = potentialInputsInRoot.indexOf(passwordInput);
               if (passwordDomIndex > 0) {
                   for (let i = passwordDomIndex - 1; i >= 0; i--) {
