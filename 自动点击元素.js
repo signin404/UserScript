@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_addValueChangeListener
-// @version      2.0
+// @version      2.1
 // @author       Max & Gemini
 // @license      MPL2.0
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iIzk5QUFCNSIgZD0iTTIwIDIuMDQ3VjJhMiAyIDAgMCAwLTQgMHYuMDQ3QzcuNzM3IDIuNDIyIDYgNS4xMjcgNiA3djE3YzAgNi42MjcgNS4zNzMgMTIgMTIgMTJzMTItNS4zNzMgMTItMTJWN2MwLTEuODczLTEuNzM3LTQuNTc4LTEwLTQuOTUzIi8+PHBhdGggZmlsbD0iIzI5MkYzMyIgZD0iTTIyIDkuMTk5di03YTM2IDM2IDAgMCAwLTItLjE1MVY5YTIgMiAwIDAgMS00IDBWMi4wNDhxLTEuMDY3LjA1MS0yIC4xNTF2N0M3LjQ1OSA5Ljg5IDYgMTIuMjkgNiAxNHYyYzAtMS43MjUgMS40ODItNC4xNTMgOC4xNjktNC44MTlDMTQuNjQ2IDEyLjIyOCAxNi4xNzEgMTMgMTggMTNzMy4zNTUtLjc3MiAzLjgzMS0xLjgxOUMyOC41MTggMTEuODQ3IDMwIDE0LjI3NSAzMCAxNnYtMmMwLTEuNzEtMS40NTktNC4xMS04LTQuODAxIi8+PC9zdmc+
@@ -473,6 +473,15 @@ class WebElementHandler {
             `;
         document.body.appendChild(menu);
 
+        // --- 修改：添加事件隔离 ---
+        // 阻止菜单上的事件冒泡到页面 防止触发网页快捷键或滚动
+        const stopPropagation = (e) => {
+            e.stopPropagation();
+        };
+        const eventTypes = ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'];
+        eventTypes.forEach(evt => menu.addEventListener(evt, stopPropagation, false));
+        // --- 修改结束 ---
+
         menu.addEventListener('mousedown', (event) => {
             const interactiveTags = ['INPUT', 'SELECT', 'OPTION', 'BUTTON'];
             if (!interactiveTags.includes(event.target.tagName.toUpperCase())) {
@@ -852,7 +861,6 @@ class ClickTaskManager {
                     this.triggerPointerEvent(targetElement, 'pointerover');
                     this.triggerPointerEvent(targetElement, 'pointerenter');
                     this.triggerPointerEvent(targetElement, 'pointermove');
-                    console.log(`${GM_info.script.name}: 规则 "${rule.ruleName}" 已执行模拟悬停`);
                 } else {
                     // 仅执行点击
                     this.performClick(targetElement, rule.clickMethod, rule.ifLinkOpen);
@@ -868,20 +876,45 @@ class ClickTaskManager {
         }
     }
 
+    // --- 新增：递归穿透 Shadow DOM 的辅助方法 ---
+    diveIntoShadow(element) {
+        let current = element;
+        let depth = 0;
+        const maxDepth = 20; // 防止死循环的安全限制
+
+        // 只要当前元素有 Shadow Root 就尝试向内查找
+        while (current && current.shadowRoot && depth < maxDepth) {
+            // 在 Shadow DOM 中寻找高优先级的交互元素
+            // 这里增加了 [role="button"] 和 tabindex 支持 以覆盖更多自定义组件
+            const internal = current.shadowRoot.querySelector('input, textarea, button, a, select, [role="button"], [tabindex]:not([tabindex="-1"])');
+            
+            if (internal) {
+                current = internal; // 深入一层 将当前焦点移交给内部元素
+                depth++;
+            } else {
+                // 如果 Shadow DOM 里没有明显的交互元素 就停留在宿主本身
+                break;
+            }
+        }
+        return current;
+    }
+
     // --- 核心更新: 【修改】不再递归搜索 只在当前文档中查找 ---
     getElements(selectorType, selector) {
         try {
+            let elements = [];
             if (selectorType === 'xpath') {
-                const results = [];
                 const nodes = document.evaluate(selector, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
                 for (let i = 0; i < nodes.snapshotLength; i++) {
-                    results.push(nodes.snapshotItem(i));
+                    elements.push(nodes.snapshotItem(i));
                 }
-                return results;
             } else if (selectorType === 'css') {
-                return Array.from(document.querySelectorAll(selector));
+                elements = Array.from(document.querySelectorAll(selector));
             }
-            return [];
+
+            // 对找到的每个元素执行递归穿透
+            return elements.map(el => this.diveIntoShadow(el));
+
         } catch (e) {
             console.warn(`${GM_info.script.name}: 选择器 "${selector}" 无效:`, e);
             return [];

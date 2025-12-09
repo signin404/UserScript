@@ -9,7 +9,7 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-start
-// @version      1.1
+// @version      1.2
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyIDM0YTIgMiAwIDAgMS0yIDJINmEyIDIgMCAwIDEtMi0yVjdhMiAyIDAgMCAxIDItMmgyNGEyIDIgMCAwIDEgMiAyeiIvPjxwYXRoIGZpbGw9IiNGRkYiIGQ9Ik0yOSAzMmExIDEgMCAwIDEtMSAxSDhhMSAxIDAgMCAxLTEtMVY5YTEgMSAwIDAgMSAxLTFoMjBhMSAxIDAgMCAxIDEgMXoiLz48cGF0aCBmaWxsPSIjQ0NENkREIiBkPSJNMjUgM2gtNGEzIDMgMCAxIDAtNiAwaC00YTIgMiAwIDAgMC0yIDJ2NWgxOFY1YTIgMiAwIDAgMC0yLTIiLz48Y2lyY2xlIGN4PSIxOCIgY3k9IjMiIHI9IjIiIGZpbGw9IiMyOTJGMzMiLz48cGF0aCBmaWxsPSIjOTlBQUI1IiBkPSJNMjAgMTRhMSAxIDAgMCAxLTEgMWgtOWExIDEgMCAwIDEgMC0yaDlhMSAxIDAgMCAxIDEgMW03IDRhMSAxIDAgMCAxLTEgMUgxMGExIDEgMCAwIDEgMC0yaDE2YTEgMSAwIDAgMSAxIDFtMCA0YTEgMSAwIDAgMS0xIDFIMTBhMSAxIDAgMSAxIDAtMmgxNmExIDEgMCAwIDEgMSAxbTAgNGExIDEgMCAwIDEtMSAxSDEwYTEgMSAwIDEgMSAwLTJoMTZhMSAxIDAgMCAxIDEgMW0wIDRhMSAxIDAgMCAxLTEgMWgtOWExIDEgMCAxIDEgMC0yaDlhMSAxIDAgMCAxIDEgMSIvPjwvc3ZnPg==
@@ -438,6 +438,24 @@
             </div>
         `;
         document.body.appendChild(modal);
+
+        const container = modal.querySelector('#cf-settings-content');
+        const modalOverlay = modal; // 这里的 modal 就是最外层的遮罩容器
+
+        // 定义阻止冒泡函数
+        const stopPropagation = (e) => {
+            e.stopPropagation();
+            // 针对滚轮事件 如果需要完全阻止背景滚动 可能还需要 preventDefault
+            // 但 stopPropagation 通常足以让网站脚本检测不到滚动
+        };
+
+        // 批量绑定事件
+        [container, modalOverlay].forEach(el => {
+            if (!el) return;
+            ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
+                el.addEventListener(evtName, stopPropagation, false);
+            });
+        });
 
         const rulesList = modal.querySelector('#cf-rules-list');
         const searchInput = modal.querySelector('#cf-search-input');

@@ -10,7 +10,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
-// @version      1.6
+// @version      1.7
 // @author       Hồng Minh Tâm & Gemini
 // @license      GPLv3
 // @icon        data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAA6lBMVEVHcEz9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH7SD/9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkEk7mAFAAAATXRSTlMABrJ4kx/v8ffNAVx0RPn4qGVZv/uIPa7EdiAOYIqh3DjX4VdjuPPoE+5YTtSHYsB5gMj6FDsjpEDTZjzdmsIanuT0BdqLnAsERlPskaOVQUwAAACxSURBVBjTbc/VDsJQEATQKdTQFooVK+7u7g77/7/D7SUBEpiHTc68TBb4m2wGyBe/ikJOLlVrH1fKxKKM3kWdeAIvBUVh0LC9WAtikBUxWk615nAeJutEMVZIphqaAIKDQpopAXFpv9twO8P+sxSHoh7Iw40rWaoCMX2kADdu9EiL9s52xQ39fmE3kYyySdszomgygRTJ3jG5up026V6ZUogYPrg9PX/f1XLDZ0R+Hn8C9iYYIKWYFpsAAAAASUVORK5CYII=
@@ -197,6 +197,38 @@
       }, 2000);
   }
 
+  // [新增] Shadow DOM 穿透辅助函数
+  function diveIntoShadow(element) {
+      let current = element;
+      let depth = 0;
+      const maxDepth = 20;
+
+      while (current && current.shadowRoot && depth < maxDepth) {
+          const internal = current.shadowRoot.querySelector('input, textarea, button, a, select, [role="button"], [tabindex]:not([tabindex="-1"])');
+          if (internal) {
+              current = internal;
+              depth++;
+          } else {
+              break;
+          }
+      }
+      return current;
+  }
+
+  // [新增] 递归查找所有 Input (支持 Shadow DOM)
+  function queryAllInputs(root = document) {
+      let inputs = Array.from(root.querySelectorAll('input'));
+
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT, {
+          acceptNode: node => node.shadowRoot ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP
+      });
+
+      while (walker.nextNode()) {
+          inputs = inputs.concat(queryAllInputs(walker.currentNode.shadowRoot));
+      }
+      return inputs;
+  }
+
   // --- 来源配置 ---
 
   const SOURCES = [
@@ -330,6 +362,14 @@
     if (listBMNEl) return;
     listBMNEl = document.createElement('ul');
     listBMNEl.classList.add('bmn-list');
+
+    // [新增] 事件隔离：防止事件冒泡到宿主网页
+    ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
+        listBMNEl.addEventListener(evtName, function(e) {
+            e.stopPropagation();
+        }, false);
+    });
+
     document.body.appendChild(listBMNEl);
   }
 
@@ -724,21 +764,28 @@
 
   function initSharedButton() {
       if (sharedButton) return;
-
+      
       sharedButton = document.createElement('button');
       sharedButton.className = 'bmn-floating-button';
       sharedButton.type = 'button';
       sharedButton.title = '获取共享账号';
       sharedButton.innerHTML = icons.mail;
-
+      
+      // [新增] 事件隔离：防止事件冒泡
+      ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
+          sharedButton.addEventListener(evtName, function(e) {
+              e.stopPropagation();
+          }, false);
+      });
+      
       sharedButton.onmousedown = function(e) {
-          e.preventDefault();
+          e.preventDefault(); 
       };
 
       sharedButton.onclick = function(e) {
           e.preventDefault();
           e.stopPropagation();
-
+          
           if (currentTargetInput) {
               const passwordInput = currentTargetInput._bmnPasswordEl;
               const data = {
@@ -755,7 +802,9 @@
   function updateSharedButtonPosition() {
     if (!currentTargetInput || !sharedButton || sharedButton.style.display === 'none') return;
 
-    if (!document.body.contains(currentTargetInput) || !isVisible(currentTargetInput)) {
+    // [修改] 使用 isConnected 替代 document.body.contains
+    // document.body.contains 无法检测 Shadow DOM 中的元素 会导致图标在 Reddit 等网站自动消失
+    if (!currentTargetInput.isConnected || !isVisible(currentTargetInput)) {
         hideSharedButton();
         return;
     }
@@ -859,23 +908,31 @@
 
       initSharedButton();
 
-      if (document.activeElement === inputUsernameEl) {
+      // [修改] 立即显示逻辑：支持 Shadow DOM 中的 activeElement
+      const activeEl = diveIntoShadow(document.activeElement);
+      if (activeEl === inputUsernameEl) {
           showSharedButton(inputUsernameEl);
       }
   }
 
   function checkAndEventToInput() {
-      const passwordInputs = document.querySelectorAll('input[type=password]:not([data-bmn-checked])');
-      if (passwordInputs.length === 0) return;
+      // 获取页面上所有的 input (包含 Shadow DOM 中的)
+      const allInputs = queryAllInputs(document);
+      
+      // 过滤出所有密码框
+      const passwordInputs = allInputs.filter(el => el.type === 'password' && !el.dataset.bmnChecked);
 
-      const allPotentialInputs = Array.from(document.querySelectorAll(
-          'input:not([type]), input[type=text], input[type=email], input[type=tel], input[type=password]'
-      ));
+      if (passwordInputs.length === 0) return;
 
       passwordInputs.forEach(passwordInput => {
           if (!isVisible(passwordInput)) return;
-          let foundUsernameInput = null;
 
+          let foundUsernameInput = null;
+          const currentRoot = passwordInput.getRootNode();
+
+          // --- 策略 1: 尝试在同一个 Shadow Root/Document 下查找 (原有逻辑) ---
+          
+          // 1.1 查找紧邻的前一个输入框
           let siblingCandidate = passwordInput.previousElementSibling;
           for (let i = 0; i < 3 && siblingCandidate; i++) {
               if (isValidUsernameInput(siblingCandidate)) {
@@ -885,17 +942,49 @@
               siblingCandidate = siblingCandidate.previousElementSibling;
           }
 
-          if (foundUsernameInput) {
-              attachButton(foundUsernameInput, passwordInput);
-              return;
+          // 1.2 在当前 Root 中向前查找
+          if (!foundUsernameInput) {
+              // 仅在当前 Root 下查找潜在输入框
+              const potentialInputsInRoot = Array.from(currentRoot.querySelectorAll(
+                  'input:not([type]), input[type=text], input[type=email], input[type=tel], input[type=password]'
+              ));
+              
+              const passwordDomIndex = potentialInputsInRoot.indexOf(passwordInput);
+              if (passwordDomIndex > 0) {
+                  for (let i = passwordDomIndex - 1; i >= 0; i--) {
+                      const globalCandidate = potentialInputsInRoot[i];
+                      if (isValidUsernameInput(globalCandidate)) {
+                          foundUsernameInput = globalCandidate;
+                          break;
+                      }
+                  }
+              }
           }
 
-          const passwordDomIndex = allPotentialInputs.indexOf(passwordInput);
-          if (passwordDomIndex > 0) {
-              for (let i = passwordDomIndex - 1; i >= 0; i--) {
-                  const globalCandidate = allPotentialInputs[i];
-                  if (isValidUsernameInput(globalCandidate)) {
-                      foundUsernameInput = globalCandidate;
+          // --- 策略 2 (新增): 跨 Shadow DOM 查找 (针对 Reddit 等网站) ---
+          // 如果在当前小圈子里没找到 就在全局大列表里找位于密码框之前的那个输入框
+          if (!foundUsernameInput) {
+              const passwordGlobalIndex = allInputs.indexOf(passwordInput);
+              if (passwordGlobalIndex > 0) {
+                  // 向前回溯查找 限制回溯范围以防误判（例如回溯最近的 5 个输入框）
+                  for (let i = passwordGlobalIndex - 1; i >= 0 && i >= passwordGlobalIndex - 5; i--) {
+                      const candidate = allInputs[i];
+                      // 确保找到的输入框是可见的 且不是密码框
+                      if (isValidUsernameInput(candidate)) {
+                          foundUsernameInput = candidate;
+                          break;
+                      }
+                  }
+              }
+          }
+
+          // --- 策略 3: 通过 name/autocomplete 查找 (原有逻辑的补充) ---
+          if (!foundUsernameInput) {
+              const explicitUserInputs = currentRoot.querySelectorAll('input[name="username"], input[autocomplete="username"]');
+              for (let i = explicitUserInputs.length - 1; i >= 0; i--) {
+                  const candidate = explicitUserInputs[i];
+                  if (isVisible(candidate) && (candidate.compareDocumentPosition(passwordInput) & Node.DOCUMENT_POSITION_FOLLOWING)) {
+                      foundUsernameInput = candidate;
                       break;
                   }
               }

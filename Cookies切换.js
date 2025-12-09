@@ -9,7 +9,7 @@
 // @grant        GM_setValue
 // @grant        GM_setClipboard
 // @run-at       document-idle
-// @version      1.2
+// @version      1.3
 // @author       Cheney & Gemini
 // @license      GPLv3
 // @icon      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABoAAAAaCAYAAACpSkzOAAAAAXNSR0IArs4c6QAAArlJREFUSEullktoE0EYx//ftEKxD2uVFitW8AH25AssKIiCvVQQsaAeeiiKBzWZRMylXmwvnipkZ6OUoniwh6BexMdBPYiIggcVRS1YwQdUbKWRIhLbuJ+d3abNdjfJNlmYw+73+H0z859vllDgYSlbAMQAVJNSxwv5FrORnwNHo/VgvgDmkzn2PlKqt1jCfHYPiKPRLbCsAQBtniDL2kuJxONSYC4Qh0IHIcRVAA2+yZiryDT/lgXiUKgZQjwBsN43EdFLMoztpUB0zNyMWMpLAE5lE70Zz+Dy6z8YaK9zPjGPkGluLAvEUnYAuJebpFaN2a89bdU411btmIgOk2HcLAVmz4ilvALAJV/PjLLZS4QRR6OrYFnvAdQvotIkgM+kVE/QGGIpTwNIBA3I8RsmpVqDxmmQlvOxoAE5fmkIsY7i8e9BYokjkadg3hXE2ccncLfQoHEwrywRpMM8MI7FGqm/35Ht7OMBfZ38Z5ta6ipc7NHfFtpvpbC2tgL3Oz26+QTmb7NHYA+EOEPxeHwhyLV0+vy0NlTiRZe7C32YyGDH0IRdwLvuFcUWYBjMnWSaWs0OnyORa2Duzn7YnZxAzRLhVzVejWXQtFSguUYUA2l7Gun0Ghoc/OmApNSt/3yQyCA+qbSF5VWuQvocUCi0CUK8BVAZJFEhn0O3f+Hhlyl7aRfs8dlsC7oOoKtc0IkHk3g2Oo2hjmXY2jhX9w9MT7c6oHB4P4julgvKE99LSvXNXxORSBLMRwrBFikGneoOKXXA3qPcxCwl5wMtUt46zSgptXpO3i5QOLwZRI9mmqynU0xOMfbdSGFbU+X8ZZivKqLnZBg7XQfWz7csyRPFyDAuLszr+7uVI5CjAPQoJv0MAL3HSTJN103tu3S+s3POmYZtmB3Z/4aPM0dixB6WlaREYriQkP4DhYT2pc+2+CQAAAAASUVORK5CYII=
@@ -129,11 +129,15 @@
         box-sizing: border-box;
         transition: transform 200ms; transform: translateX(110%);
         background-color: #fff !important; color: #000 !important;
-        box-shadow: -10px 0 10px #ddd;
-
-        /* --- 修改：强制显示垂直滚动条 防止布局跳动 --- */
-        overflow-y: scroll;
+        box-shadow: -10px 0 10px #ddd; 
+        
+        /* 强制显示垂直滚动条 */
+        overflow-y: scroll; 
         overflow-x: auto;
+        
+        /* --- 新增：阻止滚动链接/穿透 --- */
+        /* 这会让滚动事件被限制在当前容器内 不会传递给网页背景 */
+        overscroll-behavior: contain; 
       }
       .${mainClassName} .topWrapper {
         display: flex; justify-content: space-between; align-items: center; margin-bottom:10px;
@@ -203,13 +207,33 @@
       }
 
       .${mainClassName} .cookieTable { width: 100%; margin-top: 15px; border-collapse: collapse; }
-      .${mainClassName} .cookieTable thead { background-color: #f0f0f0 !important; }
+      
+      /* 强制重置 thead 样式 */
+      .${mainClassName} .cookieTable thead { 
+          background: #f0f0f0 !important; 
+          background-color: #f0f0f0 !important;
+          background-image: none !important;
+          color: #000 !important;
+      }
+      
       .${mainClassName} .cookieTable th, .${mainClassName} .cookieTable td {
         font-size: 12px; padding: 6px; text-align: center;
         border: 1px solid #ddd !important;
         color: #000 !important;
       }
-      .${mainClassName} .cookieTable th { font-size: 13px; white-space: nowrap; background-color: #e9e9e9 !important; }
+      
+      /* --- 修改：固定表头背景色并吸顶 --- */
+      .${mainClassName} .cookieTable th { 
+        font-size: 13px; 
+        white-space: nowrap; 
+        
+        /* 使用 background 简写覆盖 image/gradient 并强制不透明 */
+        background: #e9e9e9 !important; 
+        background-color: #e9e9e9 !important;
+        background-image: none !important; 
+        color: #000 !important;
+        position: static !important;
+      }
 
       /* 固定交错行背景色 */
       .${mainClassName} .cookieTable tbody tr:nth-child(odd) { background-color: #ffffff !important; }
@@ -586,7 +610,19 @@
 
     domainSelect.val(domain);
 
-    return $(`<div class='${mainClassName}'></div>`).append(topDiv, cookieTable);
+    // 创建主容器 jQuery 对象
+    const $container = $(`<div class='${mainClassName}'></div>`).append(topDiv, cookieTable);
+
+    // --- 新增：事件隔离逻辑 ---
+    // 防止在面板内的点击、按键等事件冒泡到网页 导致触发网页快捷键或关闭视频等
+    const containerEl = $container[0]; // 获取原生 DOM 元素
+    const stopPropagation = (e) => e.stopPropagation();
+    
+    ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
+        containerEl.addEventListener(evtName, stopPropagation, false);
+    });
+
+    return $container;
   }
 
   function initPage() {

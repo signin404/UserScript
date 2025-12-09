@@ -12,7 +12,7 @@
 // @grant        GM_addStyle
 // @grant        GM_notification
 // @run-at       document-idle
-// @version      12.7
+// @version      12.8
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyLjYxNCAzLjQxNEMyOC4zMS0uODkgMjEuMzMyLS44OSAxNy4wMjcgMy40MTRjLTMuMzkxIDMuMzkyLTQuMDk4IDguNDM5LTIuMTQ0IDEyLjUzNWwtMy45MTYgMy45MTVhMi40NCAyLjQ0IDAgMCAwLS42MjUgMi4zNTlsLTEuOTczIDEuOTcyYTEuMjIgMS4yMiAwIDAgMC0xLjczMSAwbC0xLjczMSAxLjczMmExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMybC0uODY3Ljg2NGExLjIyNCAxLjIyNCAwIDAgMC0xLjczMSAwbC0uODY2Ljg2N2ExLjIyMyAxLjIyMyAwIDAgMCAwIDEuNzMyYy4wMTUuMDE2LjAzNi4wMi4wNTEuMDMzYTMuMDYyIDMuMDYyIDAgMCAwIDQuNzExIDMuODYzTDIwLjA4IDIxLjE0NGM0LjA5NyAxLjk1NSA5LjE0NCAxLjI0NyAxMi41MzUtMi4xNDYgNC4zMDItNC4zMDIgNC4zMDItMTEuMjgtLjAwMS0xNS41ODRtLTEuNzMxIDUuMTk1YTIuNDUgMi40NSAwIDAgMS0zLjQ2NC0zLjQ2NCAyLjQ1IDIuNDUgMCAwIDEgMy40NjQgMy40NjQiLz48L3N2Zz4=
@@ -142,18 +142,47 @@
         return element;
     }
 
+    // [新增] 深度穿透 Shadow DOM 辅助函数
+    function diveIntoShadow(element) {
+        let current = element;
+        let depth = 0;
+        const maxDepth = 20; // 防止死循环
+
+        // 只要当前元素有 Shadow Root 就尝试向内查找
+        while (current && current.shadowRoot && depth < maxDepth) {
+            // 在 Shadow DOM 中寻找高优先级的交互元素
+            const internal = current.shadowRoot.querySelector('input, textarea, button, a, select, [role="button"], [tabindex]:not([tabindex="-1"])');
+
+            if (internal) {
+                current = internal; // 深入一层
+                depth++;
+            } else {
+                // 如果 Shadow DOM 里没有明显的交互元素 就停留在宿主本身
+                break;
+            }
+        }
+        return current;
+    }
+
     function getElementBySelector(type, selector) {
         if (!selector) return null;
+        let element = null;
+
         try {
             if (type === 'xpath') {
                 const result = document.evaluate(selector, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                return result.singleNodeValue;
+                element = result.singleNodeValue;
             } else {
-                return document.querySelector(selector);
+                element = document.querySelector(selector);
             }
         } catch (e) {
             return null;
         }
+
+        if (!element) return null;
+
+        // 对找到的元素执行深度穿透
+        return diveIntoShadow(element);
     }
 
     function triggerInputEvent(element, value) {
@@ -241,7 +270,16 @@
             max-height: 400px;
             overflow-y: auto;
             background: rgb(44, 44, 44);
+            scrollbar-width: thin !important;
+            scrollbar-color: #666 #333 !important; /* 滑块颜色 轨道颜色 */
         }
+
+        /* Chrome/Edge/Safari 滚动条样式 (强制覆盖) */
+        #totp-list::-webkit-scrollbar { width: 8px !important; height: 8px !important; }
+        #totp-list::-webkit-scrollbar-track { background: #333 !important; }
+        #totp-list::-webkit-scrollbar-thumb { background-color: #666 !important; border-radius: 4px !important; }
+        #totp-list::-webkit-scrollbar-thumb:hover { background-color: #888 !important; }
+        #totp-list::-webkit-scrollbar-corner { background: #333 !important; }
 
         /* --- 列表单项 --- */
         .totp-item {
@@ -486,7 +524,7 @@
                 <!-- Row 4: Remember Me Input | Login Button -->
                 <div class="totp-row totp-form-group">
                     <div class="totp-col-left">
-                        <input type="text" id="totp-rem-selector" placeholder="记住登录勾选框">
+                        <input type="text" id="totp-rem-selector" placeholder="记住/同意勾选框">
                     </div>
                     <div class="totp-col-right">
                         <div class="totp-input-group">
@@ -958,6 +996,7 @@
         if (!data.secret || !data.inputSelector) return;
         let attempts = 0;
         const maxAttempts = 180; // 轮询超时 (秒)
+        let hasFilledCode = false; // [新增] 标记是否已执行过填写
 
         const pollInterval = setInterval(async () => {
             attempts++;
@@ -965,93 +1004,115 @@
 
             const inputEl = getElementBySelector(data.inputSelectorType, data.inputSelector);
             if (inputEl && inputEl.offsetParent !== null) {
+
+                // 如果尚未填写 执行填写逻辑
+                if (!hasFilledCode) {
+                    const code = await generateTOTP(data);
+                    if (code !== "错误" && code !== "无密钥") {
+                        triggerInputEvent(inputEl, code);
+                        hasFilledCode = true; // [核心] 标记为已填写 后续不再覆盖
+                    }
+                }
+
+                // 检查是否满足点击确定的条件 (值匹配且长度为6)
+                // 注意：这里依然检查 value 是否匹配生成的 code 防止用户输错时自动提交
+                // 如果用户手动改了验证码 通常不需要脚本帮点确定
                 if (inputEl.value && inputEl.value.length === 6) {
-                    clearInterval(pollInterval);
+                    // 只有当值确实是脚本生成的那个 或者用户想利用脚本的点击功能时
+                    // 这里简化逻辑：只要长度对 且配置了按钮 就尝试点击
+                    // 但为了防止循环点击 通常点击后页面会跳转
+
+                    // 这里做一个简单的防抖 如果已经填了且匹配 就点击
+                    // 如果用户改了值 脚本不再干涉点击 除非值恰好也是6位
+                    // 鉴于2FA的特殊性 通常不需要手动改 这里保持原样或仅点击一次
+
+                    clearInterval(pollInterval); // 停止轮询
                     if (data.btnSelector) {
                         const btnEl = getElementBySelector(data.btnSelectorType, data.btnSelector);
                         if (btnEl) setTimeout(() => btnEl.click(), 300);
                     }
-                    return;
-                }
-                const code = await generateTOTP(data);
-                if (code !== "错误" && code !== "无密钥" && inputEl.value !== code) {
-                    triggerInputEvent(inputEl, code);
                 }
             }
         }, 1000);
     }
 
-    // 2. 合并后的登录轮询器 (同时处理 账号、密码、下一步、登录)
+    // 2. 合并后的登录轮询器 (优化：只填写一次 允许用户修改)
     function pollForLogin(data) {
-        // 如果连账号或密码选择器都没配 就没必要轮询登录逻辑了
         if (!data.userSelector && !data.passSelector) return;
 
         let attempts = 0;
         const maxAttempts = 180; // 轮询超时 (秒)
 
+        // [新增] 状态标记
+        let hasFilledUser = false;
+        let hasFilledPass = false;
+
         const loginInterval = setInterval(() => {
             attempts++;
             if (attempts > maxAttempts) { clearInterval(loginInterval); return; }
 
-            // 尝试获取元素
             const userEl = data.userSelector ? getElementBySelector(data.userSelectorType, data.userSelector) : null;
             const passEl = data.passSelector ? getElementBySelector(data.passSelectorType, data.passSelector) : null;
 
-            // 判断可见性 (offsetParent !== null 代表元素在页面上可见)
             const isUserVisible = userEl && userEl.offsetParent !== null;
             const isPassVisible = passEl && passEl.offsetParent !== null;
 
-            // --- 自动填写逻辑 (只要看见了就填) ---
-            if (isUserVisible && userEl.value !== data.username) {
+            // --- 1. 账号处理逻辑 (只执行一次) ---
+            if (isUserVisible && !hasFilledUser) {
+                // 无论当前框里有没有值(可能是浏览器预填的) 都强制覆盖一次以确保正确 然后不再触碰
                 triggerInputEvent(userEl, data.username);
 
-                // [新增] 填写完账号后 尝试点击记住登录
+                // 处理记住登录
                 if (data.rememberMeSelector) {
                     const remEl = getElementBySelector(data.rememberMeSelectorType, data.rememberMeSelector);
-                    if (remEl && !remEl.checked) {
+                    if (remEl && remEl.offsetParent !== null && !remEl.checked) {
                         remEl.click();
                     }
                 }
+
+                hasFilledUser = true; // 锁定状态
             }
-            if (isPassVisible && passEl.value !== data.password) {
+
+            // --- 2. 密码处理逻辑 (只执行一次) ---
+            if (isPassVisible && !hasFilledPass) {
                 triggerInputEvent(passEl, data.password);
+                hasFilledPass = true; // 锁定状态
             }
 
-            // --- 行为判断逻辑 ---
+            // --- 3. 行为判断与点击逻辑 ---
+            // 注意：点击逻辑依然会检查 value 是否匹配
+            // 如果用户手动修改了账号/密码 value 将不等于 data.username/password
+            // 此时脚本会自动停止点击操作 这是符合预期的安全行为
 
-            // 场景 A: 账号和密码框同时存在 (单步登录)
+            // 场景 A: 单步登录
             if (isUserVisible && isPassVisible) {
-                // 确保两个都填好了
                 if (userEl.value === data.username && passEl.value === data.password) {
                     if (data.loginBtnSelector) {
                         const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
                         if (loginBtn) {
-                            clearInterval(loginInterval); // 任务完成
+                            clearInterval(loginInterval);
                             setTimeout(() => loginBtn.click(), 500);
                         }
                     }
                 }
             }
-            // 场景 B: 仅账号框存在 (分步登录 - 第一步)
+            // 场景 B: 分步登录 - 第一步
             else if (isUserVisible && !isPassVisible) {
-                // 必须配置了“下一步按钮”才执行点击 否则可能是单步登录但密码框还没加载出来 需要等待
                 if (data.nextBtnSelector && userEl.value === data.username) {
                     const nextBtn = getElementBySelector(data.nextBtnSelectorType, data.nextBtnSelector);
                     if (nextBtn) {
-                        clearInterval(loginInterval); // 点击下一步后 页面通常会变 停止当前轮询
+                        clearInterval(loginInterval);
                         setTimeout(() => nextBtn.click(), 500);
-                        // 注意：点击后页面可能刷新 脚本会重新加载并重新启动 checkAndRunAutoFill
-                        // 如果页面不刷新(AJAX) 建议此处不清除 interval 或者依靠 checkAndRunAutoFill 的再次调用
                     }
                 }
             }
-            // 场景 C: 仅密码框存在 (分步登录 - 第二步)
+            // 场景 C: 分步登录 - 第二步
             else if (!isUserVisible && isPassVisible) {
                 if (passEl.value === data.password) {
                     if (data.loginBtnSelector) {
                         const loginBtn = getElementBySelector(data.loginBtnSelectorType, data.loginBtnSelector);
                         if (loginBtn) {
-                            clearInterval(loginInterval); // 任务完成
+                            clearInterval(loginInterval);
                             setTimeout(() => loginBtn.click(), 500);
                         }
                     }
@@ -1123,7 +1184,7 @@
     }
     // 对主容器和模态框应用隔离
     [container, modalOverlay].forEach(el => {
-        ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu'].forEach(evtName => {
+        ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
             el.addEventListener(evtName, stopPropagation, false);
         });
     });
