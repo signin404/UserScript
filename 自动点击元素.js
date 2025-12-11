@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_addValueChangeListener
-// @version      2.2
+// @version      2.3
 // @author       Max & Gemini
 // @license      MPL2.0
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iIzk5QUFCNSIgZD0iTTIwIDIuMDQ3VjJhMiAyIDAgMCAwLTQgMHYuMDQ3QzcuNzM3IDIuNDIyIDYgNS4xMjcgNiA3djE3YzAgNi42MjcgNS4zNzMgMTIgMTIgMTJzMTItNS4zNzMgMTItMTJWN2MwLTEuODczLTEuNzM3LTQuNTc4LTEwLTQuOTUzIi8+PHBhdGggZmlsbD0iIzI5MkYzMyIgZD0iTTIyIDkuMTk5di03YTM2IDM2IDAgMCAwLTItLjE1MVY5YTIgMiAwIDAgMS00IDBWMi4wNDhxLTEuMDY3LjA1MS0yIC4xNTF2N0M3LjQ1OSA5Ljg5IDYgMTIuMjkgNiAxNHYyYzAtMS43MjUgMS40ODItNC4xNTMgOC4xNjktNC44MTlDMTQuNjQ2IDEyLjIyOCAxNi4xNzEgMTMgMTggMTNzMy4zNTUtLjc3MiAzLjgzMS0xLjgxOUMyOC41MTggMTEuODQ3IDMwIDE0LjI3NSAzMCAxNnYtMmMwLTEuNzEtMS40NTktNC4xMS04LTQuODAxIi8+PC9zdmc+
@@ -712,24 +712,35 @@ class WebElementHandler {
     }
 
     setupUrlChangeListener() {
+        // 记录当前的 URL 用于后续对比
+        let lastUrl = window.location.href;
+
+        // 定义一个检查函数 只有 URL 变了才触发
+        const checkUrlChange = () => {
+            const currentUrl = window.location.href;
+            if (currentUrl !== lastUrl) {
+                lastUrl = currentUrl;
+                // 仅分发脚本内部使用的事件 不再分发 pushstate/replacestate 以免干扰网页
+                window.dispatchEvent(new Event('locationchange'));
+            }
+        };
+
         const oldPushState = history.pushState;
         history.pushState = function pushState() {
             const result = oldPushState.apply(this, arguments);
-            window.dispatchEvent(new Event('pushstate'));
-            window.dispatchEvent(new Event('locationchange'));
+            checkUrlChange();
             return result;
         };
 
         const oldReplaceState = history.replaceState;
         history.replaceState = function replaceState() {
             const result = oldReplaceState.apply(this, arguments);
-            window.dispatchEvent(new Event('replacestate'));
-            window.dispatchEvent(new Event('locationchange'));
+            checkUrlChange();
             return result;
         };
 
         window.addEventListener('popstate', () => {
-            window.dispatchEvent(new Event('locationchange'));
+            checkUrlChange();
         });
 
         window.addEventListener('locationchange', () => {
