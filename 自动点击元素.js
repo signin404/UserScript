@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_info
 // @grant        GM_addValueChangeListener
-// @version      2.3
+// @version      2.4
 // @author       Max & Gemini
 // @license      MPL2.0
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iIzk5QUFCNSIgZD0iTTIwIDIuMDQ3VjJhMiAyIDAgMCAwLTQgMHYuMDQ3QzcuNzM3IDIuNDIyIDYgNS4xMjcgNiA3djE3YzAgNi42MjcgNS4zNzMgMTIgMTIgMTJzMTItNS4zNzMgMTItMTJWN2MwLTEuODczLTEuNzM3LTQuNTc4LTEwLTQuOTUzIi8+PHBhdGggZmlsbD0iIzI5MkYzMyIgZD0iTTIyIDkuMTk5di03YTM2IDM2IDAgMCAwLTItLjE1MVY5YTIgMiAwIDAgMS00IDBWMi4wNDhxLTEuMDY3LjA1MS0yIC4xNTF2N0M3LjQ1OSA5Ljg5IDYgMTIuMjkgNiAxNHYyYzAtMS43MjUgMS40ODItNC4xNTMgOC4xNjktNC44MTlDMTQuNjQ2IDEyLjIyOCAxNi4xNzEgMTMgMTggMTNzMy4zNTUtLjc3MiAzLjgzMS0xLjgxOUMyOC41MTggMTEuODQ3IDMwIDE0LjI3NSAzMCAxNnYtMmMwLTEuNzEtMS40NTktNC4xMS04LTQuODAxIi8+PC9zdmc+
@@ -873,7 +873,13 @@ class ClickTaskManager {
         const clientX = rect.left + rect.width / 2;
         const clientY = rect.top + rect.height / 2;
 
-        const event = new PointerEvent(eventType, {
+        // 判断是否为点击动作（按下或抬起） 如果是 buttons 为 1 否则（悬停）为 0
+        const isClickAction = ['down', 'up', 'click'].some(k => eventType.includes(k));
+        const buttons = isClickAction ? 1 : 0;
+        const pressure = isClickAction ? 0.5 : 0;
+
+        // PointerEvent 配置
+        const eventConfig = {
             bubbles: true,
             cancelable: true,
             view: realWindow,
@@ -886,33 +892,67 @@ class ClickTaskManager {
             clientY: clientY,
             screenX: clientX,
             screenY: clientY,
-            buttons: 1,
-            pressure: 0.5
-        });
+            buttons: buttons,
+            pressure: pressure
+        };
+
+        // 某些事件（如 mouseenter/leave）默认不冒泡 但手动触发时通常设为冒泡以保证兼容性
+        // 这里保持 bubbles: true 能覆盖大多数情况
+
+        const event = new PointerEvent(eventType, eventConfig);
         element.dispatchEvent(event);
 
+        // 兼容旧的 MouseEvent
         if (eventType.startsWith('pointer')) {
              const mouseEventType = eventType.replace('pointer', 'mouse');
-             const mouseEvent = new MouseEvent(mouseEventType, {
-                bubbles: true,
-                cancelable: true,
-                view: realWindow,
-                clientX: clientX,
-                clientY: clientY,
-                buttons: 1
-             });
+             const mouseEvent = new MouseEvent(mouseEventType, eventConfig);
              element.dispatchEvent(mouseEvent);
         }
     }
 
+    // --- 新增：完整的悬停序列 ---
+    triggerHoverSequence(element) {
+        // 模拟鼠标移入的完整过程：Over -> Enter -> Move
+        this.triggerPointerEvent(element, 'pointerover');
+        this.triggerPointerEvent(element, 'mouseover');
+
+        this.triggerPointerEvent(element, 'pointerenter');
+        this.triggerPointerEvent(element, 'mouseenter');
+
+        this.triggerPointerEvent(element, 'pointermove');
+        this.triggerPointerEvent(element, 'mousemove');
+    }
+
+    // --- 修改：执行点击（包含悬停、聚焦、点击） ---
     performClick(targetElement, method, ifLinkOpen) {
         if (targetElement.tagName === 'SELECT') return;
 
+        // 1. 优化 Target 属性 (防止新标签页拦截)
+        if (targetElement.tagName === 'A' && targetElement.target === '_blank' && !ifLinkOpen) {
+            targetElement.setAttribute('target', '_self');
+        }
+
+        // 2. 执行完整的悬停序列 (模拟鼠标靠近)
+        this.triggerHoverSequence(targetElement);
+
+        // 3. 显式聚焦 (模拟用户点击前的 Focus)
+        // 注意：这可能会导致页面滚动到元素位置 这是符合真实行为的
+        if (typeof targetElement.focus === 'function') {
+            targetElement.focus({ preventScroll: true }); // 尽量不剧烈滚动 但获取焦点
+        }
+
+        // 4. 执行点击序列
         if (method === 'pointer') {
             this.triggerPointerEvent(targetElement, 'pointerdown');
             this.triggerPointerEvent(targetElement, 'mousedown');
+
+            // 模拟极短的按压延迟
+            // (由于 JS 单线程限制 这里不使用 setTimeout 阻塞 直接顺序执行
+            // 如果需要严格时序 需要重构为 async/await 但通常同步触发已足够欺骗检测)
+
             this.triggerPointerEvent(targetElement, 'pointerup');
             this.triggerPointerEvent(targetElement, 'mouseup');
+
             targetElement.click();
         } else {
             if (ifLinkOpen && targetElement.tagName === "A" && targetElement.href) {
@@ -923,6 +963,7 @@ class ClickTaskManager {
         }
     }
 
+    // --- 修改：autoClick 中对模拟悬停的处理 ---
     autoClick(rule) {
         try {
             const urlRegex = new RegExp(rule.urlPattern);
@@ -935,29 +976,31 @@ class ClickTaskManager {
 
             const targetElement = elements[rule.nthElement - 1];
             if (targetElement) {
+                // 处理 Select
                 if (targetElement.tagName === 'SELECT' && rule.selectValue) {
                     const targetText = rule.selectValue.trim();
-                    let foundOption = false;
                     for (const option of targetElement.options) {
                         if (option.textContent.trim() === targetText) {
-                            const optionValue = option.value;
-                            if (targetElement.value !== optionValue) {
-                                targetElement.value = optionValue;
+                            if (targetElement.value !== option.value) {
+                                targetElement.value = option.value;
                                 targetElement.dispatchEvent(new Event('change', { bubbles: true }));
                                 targetElement.dispatchEvent(new Event('input', { bubbles: true }));
                             }
-                            foundOption = true;
-                            break;
+                            return true;
                         }
                     }
                     return true;
                 }
 
+                // 处理模拟悬停 (仅悬停不点击)
                 if (rule.simulateHover) {
-                    this.triggerPointerEvent(targetElement, 'pointerover');
-                    this.triggerPointerEvent(targetElement, 'pointerenter');
-                    this.triggerPointerEvent(targetElement, 'pointermove');
+                    this.triggerHoverSequence(targetElement);
+                    // 模拟悬停时通常也伴随聚焦
+                    if (typeof targetElement.focus === 'function') {
+                        targetElement.focus({ preventScroll: true });
+                    }
                 } else {
+                    // 执行完整点击
                     this.performClick(targetElement, rule.clickMethod, rule.ifLinkOpen);
                 }
                 return true;
