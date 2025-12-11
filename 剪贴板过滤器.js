@@ -9,7 +9,7 @@
 // @grant        GM_addStyle
 // @grant        unsafeWindow
 // @run-at       document-start
-// @version      1.2
+// @version      1.3
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzNiAzNiI+PHBhdGggZmlsbD0iI0MxNjk0RiIgZD0iTTMyIDM0YTIgMiAwIDAgMS0yIDJINmEyIDIgMCAwIDEtMi0yVjdhMiAyIDAgMCAxIDItMmgyNGEyIDIgMCAwIDEgMiAyeiIvPjxwYXRoIGZpbGw9IiNGRkYiIGQ9Ik0yOSAzMmExIDEgMCAwIDEtMSAxSDhhMSAxIDAgMCAxLTEtMVY5YTEgMSAwIDAgMSAxLTFoMjBhMSAxIDAgMCAxIDEgMXoiLz48cGF0aCBmaWxsPSIjQ0NENkREIiBkPSJNMjUgM2gtNGEzIDMgMCAxIDAtNiAwaC00YTIgMiAwIDAgMC0yIDJ2NWgxOFY1YTIgMiAwIDAgMC0yLTIiLz48Y2lyY2xlIGN4PSIxOCIgY3k9IjMiIHI9IjIiIGZpbGw9IiMyOTJGMzMiLz48cGF0aCBmaWxsPSIjOTlBQUI1IiBkPSJNMjAgMTRhMSAxIDAgMCAxLTEgMWgtOWExIDEgMCAwIDEgMC0yaDlhMSAxIDAgMCAxIDEgMW03IDRhMSAxIDAgMCAxLTEgMUgxMGExIDEgMCAwIDEgMC0yaDE2YTEgMSAwIDAgMSAxIDFtMCA0YTEgMSAwIDAgMS0xIDFIMTBhMSAxIDAgMSAxIDAtMmgxNmExIDEgMCAwIDEgMSAxbTAgNGExIDEgMCAwIDEtMSAxSDEwYTEgMSAwIDEgMSAwLTJoMTZhMSAxIDAgMCAxIDEgMW0wIDRhMSAxIDAgMCAxLTEgMWgtOWExIDEgMCAxIDEgMC0yaDlhMSAxIDAgMCAxIDEgMSIvPjwvc3ZnPg==
@@ -31,12 +31,18 @@
         cachedRules = rawRules
             .filter(r => r.enabled !== false && r.find) // 过滤掉禁用的和无效的
             .map(rule => {
+                // 新增：Unicode 标志处理
+                const baseFlags = rule.useUnicode ? 'u' : '';
+
                 // 1. 预编译 URL 匹配正则
                 let siteRegex = null;
                 let siteString = null;
                 if (rule.match && rule.match.trim() !== "") {
                     if (rule.useRegexMatch) {
-                        try { siteRegex = new RegExp(rule.match); } catch (e) { console.error('Invalid Site Regex', e); }
+                        try {
+                            // 匹配 URL 通常不需要 g 但如果开启 Unicode 需要 u
+                            siteRegex = new RegExp(rule.match, baseFlags);
+                        } catch (e) { console.error('Invalid Site Regex', e); }
                     } else {
                         siteString = rule.match;
                     }
@@ -46,11 +52,12 @@
                 let findRegex = null;
                 try {
                     if (rule.useRegexFind) {
-                        findRegex = new RegExp(rule.find, 'g');
+                        // 查找需要全局 g 如果开启 Unicode 则为 gu
+                        findRegex = new RegExp(rule.find, 'g' + baseFlags);
                     } else {
                         // 自动转义特殊字符
                         const escapedFind = rule.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        findRegex = new RegExp(escapedFind, 'g');
+                        findRegex = new RegExp(escapedFind, 'g' + baseFlags);
                     }
                 } catch (e) {
                     console.error('Invalid Find Regex', e);
@@ -103,7 +110,6 @@
                 } else {
                     // 普通文本替换 处理 $ 符号
                     const finalReplaceText = rule.useRegexReplace ? replaceText : replaceText.replace(/\$/g, '$$$$');
-                    // 如果不是特殊变量 直接存字符串即可 不需要函数
                     replaceHandler = finalReplaceText;
                 }
 
@@ -140,10 +146,7 @@
             }
 
             // 2. 执行替换
-            // 由于 findRegex 是全局的 (g flag) 且 lastIndex 可能会保留
-            // 建议每次使用前重置 lastIndex 或者因为是 replace 方法调用 JS 引擎会自动处理
             rule.findRegex.lastIndex = 0;
-
             processedText = processedText.replace(rule.findRegex, rule.replaceHandler);
         }
 
@@ -155,26 +158,16 @@
     // ==========================================
 
     function hijackClipboardApi() {
-        // 获取页面真实的 window 对象 (Tampermonkey 中通常是 unsafeWindow)
         const targetWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
-
-        // 确保 navigator.clipboard 存在
         if (targetWindow.navigator && targetWindow.navigator.clipboard) {
             const originalWriteText = targetWindow.navigator.clipboard.writeText;
-
-            // 覆盖 writeText 方法
             targetWindow.navigator.clipboard.writeText = function(text) {
-                // 1. 应用过滤规则
                 const processed = applyRulesToText(text);
-
-                // 2. 调用原始方法写入过滤后的文本
-                // 注意：必须绑定 this 到原始 clipboard 对象
                 return originalWriteText.call(this, processed);
             };
         }
     }
 
-    // 立即执行劫持
     hijackClipboardApi();
 
     // ==========================================
@@ -185,26 +178,16 @@
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
 
-        // 1. 先只获取纯文本（开销极小）
         const plainText = selection.toString();
         if (!plainText) return;
 
-        // 2. 尝试对纯文本应用规则
         const processedPlainText = applyRulesToText(plainText);
 
-        // 3. 关键判断：如果纯文本没有变化 说明没有规则命中（或者规则不改变内容）
-        // 此时直接 return 不调用 preventDefault()
-        // 浏览器会执行默认复制 自动处理好纯文本和 HTML 性能最高 且保留原格式
         if (processedPlainText === plainText) {
             return;
         }
 
-        // ============================================================
-        // 只有当内容确实需要修改时 我们才被迫付出性能代价去处理 HTML
-        // ============================================================
-
         let htmlText = "";
-        // 只有当剪贴板支持 HTML 时才去提取
         if (e.clipboardData) {
             const container = document.createElement('div');
             for (let i = 0; i < selection.rangeCount; i++) {
@@ -213,19 +196,13 @@
             htmlText = container.innerHTML;
         }
 
-        // 处理 HTML
         const processedHtmlText = applyRulesToText(htmlText);
 
-        // 写入剪贴板
         e.preventDefault();
         e.clipboardData.setData('text/plain', processedPlainText);
-
-        // 如果原本有 HTML 处理后也要写回去 否则格式会丢失
         if (htmlText) {
             e.clipboardData.setData('text/html', processedHtmlText);
         }
-
-        // 阻止冒泡
         e.stopImmediatePropagation();
     }, true);
 
@@ -233,21 +210,15 @@
     // 数据存储与默认值
     // ==========================================
 
-    const DEFAULT_RULES = [];
-
     GM_registerMenuCommand("设置面板", openSettings);
 
     function getRules() {
-        return GM_getValue('cf_rules', []); // 仅用于设置界面读取
-    }
-
-    function getEnabledRules() {
-        return getRules().filter(r => r.enabled !== false);
+        return GM_getValue('cf_rules', []);
     }
 
     function saveRules(rules) {
         GM_setValue('cf_rules', rules);
-        refreshRulesCache(); // 保存后立即刷新内存缓存
+        refreshRulesCache();
     }
 
     // ==========================================
@@ -269,13 +240,13 @@
             #cf-settings-modal * { box-sizing: border-box !important; }
             #cf-settings-content {
                 background: rgb(44, 44, 44) !important; padding: 15px !important; border: 1px solid rgb(80, 80, 80) !important;
-                width: 850px !important; max-width: 95% !important; max-height: 90% !important;
+                width: 900px !important; max-width: 98% !important; max-height: 90% !important;
                 display: flex !important; flex-direction: column !important; box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
                 pointer-events: auto !important; border-radius: 0 !important;
             }
             .cf-header {
                 display: flex !important; gap: 5px !important; align-items: center !important; position: relative !important;
-                margin-bottom: 10px !important; height: 30px !important; padding: 0 14px 0 6px !important; flex-shrink: 0 !important;
+                margin-bottom: 5px !important; height: 30px !important; padding: 0 14px 0 6px !important; flex-shrink: 0 !important;
             }
             .cf-header-title {
                 position: absolute !important; left: 0 !important; width: 100% !important; text-align: center !important;
@@ -287,10 +258,10 @@
                 color: #ccc !important; padding: 0 !important;
             }
             #cf-help {
-                position: static !important; width: 26px !important; height: auto !important; border: none !important;
-                background: none !important; cursor: pointer !important; font-size: 15px !important; font-weight: bold !important;
-                line-height: 1 !important; color: #999 !important; padding: 0 !important; display: flex !important;
-                justify-content: center !important; align-items: center !important;
+                width: 26px !important; height: 20px !important; border: none !important; background: none !important;
+                cursor: pointer !important; font-size: 15px !important; font-weight: bold !important; line-height: 1 !important;
+                color: #999 !important; padding: 0 !important; display: flex !important; justify-content: center !important;
+                align-items: center !important;
             }
             #cf-help:hover { color: #fff !important; }
 
@@ -306,7 +277,8 @@
             #cf-help-window-close { border: none !important; background: none !important; cursor: pointer !important; font-size: 18px !important; color: #ccc !important; padding: 0 !important; }
             #cf-help-grid { display: grid !important; grid-template-columns: 100px 1fr !important; gap: 8px 15px !important; align-items: center !important; }
             .cf-help-col-header { color: #999 !important; font-size: 12px !important; border-bottom: 1px solid #666 !important; padding-bottom: 8px !important; margin-bottom: 5px !important; }
-            .cf-help-key { color: rgb(178, 139, 247) !important; font-size: 13px !important; }
+            .cf-help-key { color: rgb(178, 139, 247) !important; font-size: 13px !important; cursor: pointer !important; user-select: none !important; transition: color 0.2s !important; }
+            .cf-help-key:active { transform: scale(0.98) !important; }
             .cf-help-desc { color: #ccc !important; font-size: 13px !important; line-height: 1.4 !important; }
 
             /* 搜索框 */
@@ -319,12 +291,11 @@
             /* 表头 */
             .cf-table-header {
                 display: flex !important; gap: 5px !important; padding: 0 16px 5px 5px !important; font-size: 12px !important;
-                color: #ccc !important; border-bottom: 1px solid #555 !important; margin-bottom: 0 !important; flex-shrink: 0 !important;
+                color: #ccc !important; border-bottom: 1px solid #555 !important; margin-bottom: 0 !important; flex-shrink: 0 !important; align-items: flex-end !important;
             }
             .cf-rules-container {
                 flex: 1 !important; margin-bottom: 10px !important; border: 1px solid #555 !important; border-top: none !important;
-                background: #2a2a2a !important;
-                overflow-y: scroll !important;
+                background: #2a2a2a !important; overflow-y: scroll !important;
             }
             .cf-rules-container::-webkit-scrollbar { width: 10px !important; }
             .cf-rules-container::-webkit-scrollbar-track { background: #222 !important; border-left: 1px solid #444 !important; }
@@ -359,6 +330,8 @@
             }
             .cf-btn:hover { background: #555 !important; color: #fff !important; }
             .cf-btn.active { background: rgb(118, 202, 83) !important; color: white !important; border-color: rgb(118, 202, 83) !important; }
+            .cf-btn-unicode.active { background: rgb(156, 39, 176) !important; color: white !important; border-color: rgb(156, 39, 176) !important; }
+
             .cf-btn-toggle { margin-right: 0 !important; }
             .cf-btn-danger { background: #333 !important; color: #ff6b6b !important; border: 1px solid #555 !important; width: 26px !important; }
             .cf-btn-danger:hover { background: #d32f2f !important; color: white !important; border-color: #d32f2f !important; }
@@ -369,7 +342,7 @@
             .cf-footer { display: flex !important; justify-content: flex-end !important; gap: 0 !important; padding: 4px 0px !important; flex-shrink: 0 !important; }
             #cf-add-rule { background: #333 !important; color: #ccc !important; border: 1px solid #555 !important; flex-shrink: 0 !important; width: auto !important; flex: 1 !important; margin-bottom: 0 !important; height: 30px !important; border-right: none !important; }
             #cf-add-rule:hover { background: #3a3a3a !important; color: #fff !important; border-color: #777 !important; }
-            #cf-save { width: 73px !important; height: 30px !important; padding: 0 !important; font-size: 12px !important; border-left: 1px solid #555 !important; white-space: nowrap !important; border: 1px solid #555 !important; }
+            #cf-save { width: 104px !important; height: 30px !important; padding: 0 !important; font-size: 12px !important; border-left: 1px solid #555 !important; white-space: nowrap !important; border: 1px solid #555 !important; }
         `);
 
         const modal = document.createElement('div');
@@ -385,6 +358,7 @@
                     </div>
                     <div style="flex: 2 !important;"></div>
                     <div style="width: 26px !important;"></div>
+                    <div style="width: 26px !important;"></div>
                     <button id="cf-close">&times;</button>
                 </div>
 
@@ -392,11 +366,11 @@
                     <div style="width: 26px !important;"></div>
                     <div style="flex: 1.2 !important;">生效网站</div>
                     <div style="flex: 1 !important;">查找</div>
-                    <div style="flex: 1 !important; display: flex !important; align-items: center !important;">
-                        <div style="flex: 1 !important;">替换</div>
+                    <div style="flex: 1 !important;">替换</div>
+                    <div style="width: 26px !important;"></div>
+                    <div style="width: 26px !important; display: flex !important; justify-content: center !important;">
                         <button id="cf-help" title="帮助">?</button>
                     </div>
-                    <div style="width: 26px !important;"></div>
                 </div>
 
                 <div class="cf-rules-container" id="cf-rules-list"></div>
@@ -439,20 +413,13 @@
         `;
         document.body.appendChild(modal);
 
-        const container = modal.querySelector('#cf-settings-content');
-        const modalOverlay = modal; // 这里的 modal 就是最外层的遮罩容器
-
-        // 定义阻止冒泡函数
-        const stopPropagation = (e) => {
-            e.stopPropagation();
-            // 针对滚轮事件 如果需要完全阻止背景滚动 可能还需要 preventDefault
-            // 但 stopPropagation 通常足以让网站脚本检测不到滚动
-        };
-
-        // 批量绑定事件
-        [container, modalOverlay].forEach(el => {
+        // 事件隔离
+        const settingsContent = modal.querySelector('#cf-settings-content');
+        const helpWindow = modal.querySelector('#cf-help-window');
+        const stopPropagation = (e) => e.stopPropagation();
+        [settingsContent, helpWindow].forEach(el => {
             if (!el) return;
-            ['click', 'mousedown', 'keydown', 'keyup', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
+            ['click', 'mousedown', 'mouseup', 'dblclick', 'keydown', 'keyup', 'keypress', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
                 el.addEventListener(evtName, stopPropagation, false);
             });
         });
@@ -471,30 +438,26 @@
             }
 
             currentRules.forEach((rule, index) => {
+                // 搜索逻辑
                 if (filterText) {
                     if (filterText === '*') {
-                        // 特殊逻辑：输入 * 时 只显示适用于所有网站的规则
-                        // 即：match 字段为空或只包含空格的规则
-                        if (rule.match && rule.match.trim() !== "") {
-                            return; // 如果有特定网站匹配 则隐藏
-                        }
+                        if (rule.match && rule.match.trim() !== "") return;
                     } else {
-                        // 原有逻辑：普通关键词搜索
                         const matchText = (rule.match || '').toLowerCase();
                         const findText = (rule.find || '').toLowerCase();
-                        // 同时也搜索替换内容 方便查找
                         const replaceText = (rule.replace || '').toLowerCase();
-
-                        if (!matchText.includes(filterText) &&
-                            !findText.includes(filterText) &&
-                            !replaceText.includes(filterText)) {
+                        if (!matchText.includes(filterText) && !findText.includes(filterText) && !replaceText.includes(filterText)) {
                             return;
                         }
                     }
                 }
 
+                // 默认值初始化
                 if (rule.enabled === undefined) rule.enabled = true;
                 if (rule.useRegexMatch === undefined) rule.useRegexMatch = false;
+                if (rule.useRegexFind === undefined) rule.useRegexFind = false;
+                if (rule.useRegexReplace === undefined) rule.useRegexReplace = false;
+                if (rule.useUnicode === undefined) rule.useUnicode = false;
 
                 const row = document.createElement('div');
                 row.className = `cf-rule-row ${rule.enabled ? '' : 'disabled'}`;
@@ -520,9 +483,13 @@
                             <button class="cf-btn rule-regex-replace ${rule.useRegexReplace ? 'active' : ''}" title="正则替换">.*</button>
                         </div>
                     </div>
+
+                    <button class="cf-btn cf-btn-unicode ${rule.useUnicode ? 'active' : ''}" title="启用 Unicode 模式">U</button>
+
                     <button class="cf-btn cf-btn-danger rule-delete" title="删除规则">X</button>
                 `;
 
+                // 绑定事件
                 const inputs = row.querySelectorAll('input');
                 inputs[0].oninput = (e) => { currentRules[index].match = e.target.value; e.target.title = e.target.value; };
                 inputs[1].oninput = (e) => { currentRules[index].find = e.target.value; e.target.title = e.target.value; };
@@ -532,6 +499,7 @@
                 row.querySelector('.rule-regex-match').onclick = () => { currentRules[index].useRegexMatch = !currentRules[index].useRegexMatch; renderRules(); };
                 row.querySelector('.rule-regex-find').onclick = () => { currentRules[index].useRegexFind = !currentRules[index].useRegexFind; renderRules(); };
                 row.querySelector('.rule-regex-replace').onclick = () => { currentRules[index].useRegexReplace = !currentRules[index].useRegexReplace; renderRules(); };
+                row.querySelector('.cf-btn-unicode').onclick = () => { currentRules[index].useUnicode = !currentRules[index].useUnicode; renderRules(); };
                 row.querySelector('.rule-delete').onclick = () => { currentRules.splice(index, 1); renderRules(); };
 
                 rulesList.appendChild(row);
@@ -543,7 +511,12 @@
 
         document.getElementById('cf-add-rule').onclick = () => {
             searchInput.value = '';
-            currentRules.push({ match: '', find: '', replace: '', enabled: true, useRegexMatch: false, useRegexFind: false, useRegexReplace: false });
+            currentRules.push({
+                match: '', find: '', replace: '',
+                enabled: true,
+                useRegexMatch: false, useRegexFind: false, useRegexReplace: false,
+                useUnicode: false
+            });
             renderRules();
             setTimeout(() => rulesList.scrollTop = rulesList.scrollHeight, 0);
         };
@@ -556,16 +529,16 @@
 
         document.getElementById('cf-close').onclick = () => modal.remove();
 
+        // 帮助窗口逻辑
         const helpBtn = document.getElementById('cf-help');
-        const helpWindow = document.getElementById('cf-help-window');
+        const helpWindowEl = document.getElementById('cf-help-window');
         const helpCloseBtn = document.getElementById('cf-help-window-close');
 
-        helpBtn.onclick = () => helpWindow.style.setProperty('display', 'flex', 'important');
-        helpCloseBtn.onclick = () => helpWindow.style.setProperty('display', 'none', 'important');
+        helpBtn.onclick = () => helpWindowEl.style.setProperty('display', 'flex', 'important');
+        helpCloseBtn.onclick = () => helpWindowEl.style.setProperty('display', 'none', 'important');
 
         const helpKeys = modal.querySelectorAll('.cf-help-key');
         helpKeys.forEach(key => {
-            key.style.setProperty('cursor', 'pointer', 'important');
             key.onclick = () => {
                 const textToCopy = key.innerText;
                 navigator.clipboard.writeText(textToCopy).then(() => {

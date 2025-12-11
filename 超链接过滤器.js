@@ -8,7 +8,7 @@
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-start
-// @version      2.0
+// @version      2.1
 // @author       wOxxOm & Gemini
 // @license      GPLv3
 // @icon      data:image/png;base64,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
@@ -45,13 +45,22 @@ function getRules() {
 function loadRules() {
     const rawRules = getRules();
     cachedRules = rawRules.map(rule => {
-        // 确保 enabled 默认为 true
         if (rule.enabled === undefined) rule.enabled = true;
+        // 新增：默认关闭 Unicode 模式
+        if (rule.useUnicode === undefined) rule.useUnicode = false;
+
+        // 确定正则标志：如果有 Unicode 模式 添加 'u'
+        const baseFlags = rule.useUnicode ? 'u' : '';
 
         // 预编译匹配正则
         let matchRegex = null;
         if (rule.useRegexMatch && rule.match) {
-            try { matchRegex = new RegExp(rule.match); } catch(e) {}
+            try {
+                // 注意：match 通常不需要全局 'g' 但需要支持 'u'
+                matchRegex = new RegExp(rule.match, baseFlags);
+            } catch(e) {
+                console.warn('Invalid Match Regex:', e);
+            }
         }
 
         // 预编译查找正则
@@ -59,12 +68,15 @@ function loadRules() {
         if (rule.find) {
             try {
                 if (rule.useRegexFind) {
-                    findRegex = new RegExp(rule.find, 'g');
+                    // 查找通常需要全局 'g'
+                    findRegex = new RegExp(rule.find, 'g' + baseFlags);
                 } else {
                     const escapedFind = rule.find.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    findRegex = new RegExp(escapedFind, 'g');
+                    findRegex = new RegExp(escapedFind, 'g' + baseFlags);
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.warn('Invalid Find Regex:', e);
+            }
         }
         return { ...rule, _matchRegex: matchRegex, _findRegex: findRegex };
     });
@@ -233,10 +245,9 @@ function openSettings() {
     const existing = document.getElementById('decloak-settings-modal');
     if (existing) return;
 
-    // 样式调整：所有属性强制 !important 以防止网页样式干扰
     GM_addStyle(`
         #decloak-settings-modal {
-            all: initial !important; /* 重置所有继承属性 */
+            all: initial !important;
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
@@ -254,16 +265,14 @@ function openSettings() {
             line-height: normal !important;
             text-align: left !important;
         }
-        #decloak-settings-modal * {
-            box-sizing: border-box !important;
-        }
         #decloak-settings-modal * { box-sizing: border-box !important; }
+
         #decloak-settings-content {
             background: rgb(44, 44, 44) !important;
             padding: 15px !important;
             border: 1px solid rgb(80, 80, 80) !important;
-            width: 850px !important;
-            max-width: 95% !important;
+            width: 900px !important;
+            max-width: 98% !important;
             max-height: 90% !important;
             display: flex !important;
             flex-direction: column !important;
@@ -272,19 +281,17 @@ function openSettings() {
             border-radius: 0 !important;
         }
 
-        /* 头部布局：Flex 模拟表格列 + 绝对定位标题 */
+        /* 头部布局 */
         .decloak-header {
             display: flex !important;
             gap: 5px !important;
             align-items: center !important;
             position: relative !important;
-            margin-bottom: 10px !important;
+            margin-bottom: 5px !important;
             height: 30px !important;
             padding: 0 14px 0 6px !important;
             flex-shrink: 0 !important;
         }
-
-        /* 标题绝对居中 */
         .decloak-header-title {
             position: absolute !important;
             left: 0 !important;
@@ -292,11 +299,9 @@ function openSettings() {
             text-align: center !important;
             font-size: 16px !important;
             color: #fff !important;
-            pointer-events: none !important; /* 防止遮挡点击 */
+            pointer-events: none !important;
             z-index: 0 !important;
         }
-
-        /* 关闭按钮绝对定位在右侧 */
         #decloak-close {
             position: absolute !important;
             right: 0 !important;
@@ -310,11 +315,10 @@ function openSettings() {
             padding: 0 !important;
         }
 
-        /* 帮助按钮样式 */
+        /* 帮助按钮 */
         #decloak-help {
-            position: static !important;
             width: 26px !important;
-            height: auto !important;
+            height: 20px !important;
             border: none !important;
             background: none !important;
             cursor: pointer !important;
@@ -327,18 +331,15 @@ function openSettings() {
             justify-content: center !important;
             align-items: center !important;
         }
-        #decloak-help:hover {
-            color: #fff !important;
-            background: none !important;
-        }
+        #decloak-help:hover { color: #fff !important; }
 
-        /* 修改：帮助窗口 (独立居中 无遮罩) */
+        /* 帮助窗口 */
         #decloak-help-window {
             display: none !important;
             position: fixed !important;
             top: 50% !important; left: 50% !important;
             transform: translate(-50%, -50%) !important;
-            width: 320px !important; /* 稍微加宽 */
+            width: 320px !important;
             background: rgb(55, 55, 55) !important;
             border: 1px solid rgb(100, 100, 100) !important;
             box-shadow: 0 15px 40px rgba(0,0,0,0.8) !important;
@@ -347,30 +348,22 @@ function openSettings() {
             padding: 15px !important;
             pointer-events: auto !important;
         }
-
         .decloak-help-header {
             display: flex !important; justify-content: space-between !important; align-items: center !important;
             margin-bottom: 15px !important;
-            /* 移除底边框 改由网格标题承担 */
-            /* border-bottom: 1px solid #666 !important; padding-bottom: 5px !important; */
         }
         .decloak-help-title { color: #fff !important; font-size: 14px !important; }
-
         #decloak-help-window-close {
             border: none !important; background: none !important; cursor: pointer !important;
             font-size: 18px !important; line-height: 1 !important; color: #ccc !important; padding: 0 !important;
         }
         #decloak-help-window-close:hover { color: #fff !important; }
-
-        /* 新增：网格布局容器 */
         #decloak-help-grid {
             display: grid !important;
-            grid-template-columns: 100px 1fr !important; /* 左列100px 右列自动填充 */
-            gap: 8px 15px !important; /* 行间距10px 列间距15px */
+            grid-template-columns: 100px 1fr !important;
+            gap: 8px 15px !important;
             align-items: center !important;
         }
-
-        /* 新增：列标题样式 */
         .decloak-help-col-header {
             color: #999 !important;
             font-size: 12px !important;
@@ -378,7 +371,6 @@ function openSettings() {
             padding-bottom: 8px !important;
             margin-bottom: 5px !important;
         }
-
         .decloak-help-key {
             color: rgb(178, 139, 247) !important;
             user-select: none !important;
@@ -386,11 +378,7 @@ function openSettings() {
             transition: color 0.2s !important;
             font-size: 13px !important;
         }
-        .decloak-help-key:active {
-            transform: scale(0.98) !important;
-        }
-
-        /* 修改：描述样式 */
+        .decloak-help-key:active { transform: scale(0.98) !important; }
         .decloak-help-desc {
             color: #ccc !important;
             user-select: text !important;
@@ -398,7 +386,7 @@ function openSettings() {
             line-height: 1.4 !important;
         }
 
-        /* 搜索框样式 */
+        /* 搜索框 */
         #decloak-search-input {
             background: #222 !important;
             border: 1px solid #555 !important;
@@ -407,9 +395,9 @@ function openSettings() {
             font-size: 13px !important;
             border-radius: 0 !important;
             margin: 0 !important;
-            flex: 1 !important; /* 填满分配的空间 */
+            flex: 1 !important;
             height: 26px !important;
-            z-index: 5 !important; /* 确保在标题之上可点击 */
+            z-index: 5 !important;
         }
         #decloak-search-input:focus {
             border-color: #888 !important;
@@ -417,12 +405,16 @@ function openSettings() {
             background: #111 !important;
         }
 
+        /* 表头样式 */
         .decloak-table-header {
-            display: flex !important; gap: 5px !important; padding: 0 16px 5px 5px !important;
+            display: flex !important; gap: 5px !important;
+            padding: 0 16px 5px 5px !important;
             font-size: 12px !important; color: #ccc !important;
             border-bottom: 1px solid #555 !important; margin-bottom: 0 !important;
             flex-shrink: 0 !important;
+            align-items: flex-end !important;
         }
+
         .decloak-rules-container {
             flex: 1 !important;
             overflow-y: scroll !important;
@@ -432,7 +424,7 @@ function openSettings() {
             background: #2a2a2a !important;
         }
 
-        /* 紧凑行样式 */
+        /* 行样式 */
         .decloak-rule-row {
             display: flex !important;
             gap: 5px !important;
@@ -455,13 +447,11 @@ function openSettings() {
             margin: 0 !important;
             padding: 0 !important;
         }
-
         .decloak-input-wrapper {
             display: flex !important;
             height: 26px !important;
             width: 100% !important;
         }
-
         .decloak-input {
             padding: 2px 5px !important;
             border: 1px solid #555 !important;
@@ -481,12 +471,11 @@ function openSettings() {
             background: #111 !important;
         }
 
-        /* 特定输入框颜色 */
         .rule-match { color: rgb(77, 171, 247) !important; }
         .rule-find { color: rgb(246, 182, 78) !important; }
         .rule-replace { color: rgb(178, 139, 247) !important; }
 
-        /* 按钮通用样式 */
+        /* 按钮通用 */
         .decloak-btn {
             padding: 0 !important;
             cursor: pointer !important;
@@ -505,14 +494,21 @@ function openSettings() {
         }
         .decloak-btn:hover { background: #555 !important; color: #fff !important; }
 
-        /* 正则按钮激活颜色 RGB 118,202,83 */
         .decloak-btn.active {
             background: rgb(118, 202, 83) !important;
             color: white !important;
             border-color: rgb(118, 202, 83) !important;
         }
+
+        /* Unicode 按钮激活 (紫色) */
+        .decloak-btn-unicode.active {
+            background: rgb(156, 39, 176) !important;
+            color: white !important;
+            border-color: rgb(156, 39, 176) !important;
+        }
+
         .decloak-btn-toggle { margin-right: 0 !important; }
-        /* 删除按钮 */
+
         .decloak-btn-danger {
             background: #333 !important;
             color: #ff6b6b !important;
@@ -524,8 +520,6 @@ function openSettings() {
             color: white !important;
             border-color: #d32f2f !important;
         }
-
-        /* 主要按钮 */
         .decloak-btn-primary {
             background: #1976D2 !important;
             color: white !important;
@@ -536,7 +530,6 @@ function openSettings() {
         }
         .decloak-btn-primary:hover { background: #1565C0 !important; }
 
-        /* 添加按钮 */
         #decloak-add-rule {
             background: #333 !important;
             color: #ccc !important;
@@ -561,10 +554,8 @@ function openSettings() {
             padding: 4px 0px !important;
             flex-shrink: 0 !important;
         }
-
-        /* 保存按钮样式 */
         #decloak-save {
-            width: 73px !important;
+            width: 104px !important;
             height: 30px !important;
             padding: 0 !important;
             font-size: 12px !important;
@@ -573,11 +564,9 @@ function openSettings() {
             border: 1px solid #555 !important;
         }
 
-        /* 输入框组合样式 */
         .decloak-input-wrapper .decloak-input { border-right: none !important; }
         .decloak-input-wrapper .decloak-btn { border-left: 1px solid #555 !important; }
 
-        /* 滚动条样式 */
         .decloak-rules-container::-webkit-scrollbar { width: 10px !important; }
         .decloak-rules-container::-webkit-scrollbar-track { background: #222 !important; border-left: 1px solid #444 !important; }
         .decloak-rules-container::-webkit-scrollbar-thumb { background: #555 !important; }
@@ -589,88 +578,59 @@ function openSettings() {
     modal.innerHTML = `
         <div id="decloak-settings-content">
             <div class="decloak-header">
-                <!-- 标题层：绝对居中 -->
                 <div class="decloak-header-title">链接过滤规则</div>
-
-                <!-- 布局层：模拟下方表格的列宽 实现对齐 -->
-                <!-- 1. 占位：对应 Toggle 按钮 -->
                 <div style="width: 26px !important;"></div>
-
-                <!-- 2. 容器：对应 Match 列 (flex: 1.2) -->
                 <div style="flex: 1.2 !important; display: flex !important; gap: 0 !important;">
-                    <!-- 搜索框：对应 Input (flex: 1) -->
                     <input type="text" id="decloak-search-input" placeholder="搜索..." title="输入关键词">
-                    <!-- 占位：对应 Regex 按钮 (27px) -->
                     <div style="width: 27px !important;"></div>
                 </div>
-
-                <!-- 3. 占位：对应 Find + Replace 列 (flex: 2) -->
                 <div style="flex: 2 !important;"></div>
-
-                <!-- 4. 占位：对应 Delete 按钮 -->
                 <div style="width: 26px !important;"></div>
-
-                <!-- 关闭按钮 -->
+                <div style="width: 26px !important;"></div>
                 <button id="decloak-close">&times;</button>
             </div>
 
-            <!-- 表头 -->
             <div class="decloak-table-header">
                 <div style="width: 26px !important;"></div>
                 <div style="flex: 1.2 !important;">链接匹配</div>
                 <div style="flex: 1 !important;">查找</div>
-                <div style="flex: 1 !important; display: flex !important; align-items: center !important;">
                 <div style="flex: 1 !important;">替换</div>
-                <button id="decloak-help" title="帮助">?</button>
-                </div>
+                <!-- 占位符：对应下方的 Unicode 按钮 -->
                 <div style="width: 26px !important;"></div>
+                <!-- 帮助按钮：对应下方的删除按钮 -->
+                <div style="width: 26px !important; display: flex !important; justify-content: center !important;">
+                    <button id="decloak-help" title="帮助">?</button>
+                </div>
             </div>
 
-            <div class="decloak-rules-container" id="decloak-rules-list">
-                <!-- Rules will be injected here -->
-            </div>
+            <div class="decloak-rules-container" id="decloak-rules-list"></div>
 
             <div class="decloak-footer">
                 <button id="decloak-add-rule" class="decloak-btn">+ 添加规则</button>
                 <button id="decloak-save" class="decloak-btn decloak-btn-primary">保存</button>
             </div>
+        </div>
 
-        <!-- 修改：独立的帮助窗口 -->
         <div id="decloak-help-window">
             <div class="decloak-help-header">
                 <span class="decloak-help-title">帮助</span>
                 <button id="decloak-help-window-close">&times;</button>
             </div>
-
             <div id="decloak-help-grid">
-                <!-- 列标题 -->
                 <div class="decloak-help-col-header">变量</div>
                 <div class="decloak-help-col-header">说明</div>
-
-                <!-- URL -->
                 <div class="decloak-help-key">{URL}</div>
                 <div class="decloak-help-desc">URL解码</div>
-
-                <!-- HEX -->
                 <div class="decloak-help-key">{HEX}</div>
                 <div class="decloak-help-desc">十六进制解码</div>
-
-                <!-- ROT13 -->
                 <div class="decloak-help-key">{ROT13}</div>
                 <div class="decloak-help-desc">ROT13解码</div>
-
-                <!-- BASE64 -->
                 <div class="decloak-help-key">{BASE64}</div>
                 <div class="decloak-help-desc">BASE64解码</div>
-
-                <!-- REVERSE -->
                 <div class="decloak-help-key">{REVERSE}</div>
                 <div class="decloak-help-desc">字符串反转</div>
-
-                <!-- 删除 -->
                 <div class="decloak-help-key" style="color: #aaa !important; cursor: default !important; text-decoration: none !important;">替换留空</div>
                 <div class="decloak-help-desc">删除查找的字符</div>
-
                 <div class="decloak-help-key" style="color: #aaa !important; cursor: default !important; text-decoration: none !important;">查找和替换留空</div>
                 <div class="decloak-help-desc">不执行默认规则</div>
             </div>
@@ -678,24 +638,17 @@ function openSettings() {
     `;
     document.body.appendChild(modal);
 
-    // --- 事件隔离逻辑 Start ---
+    // --- 事件隔离逻辑 ---
     const settingsContent = modal.querySelector('#decloak-settings-content');
     const helpWindow = modal.querySelector('#decloak-help-window');
-
-    const stopPropagation = (e) => {
-        e.stopPropagation();
-        // 注意：这里不使用 stopImmediatePropagation 以免阻止我们自己的内部逻辑
-    };
-
-    // 对两个主要容器应用事件隔离
+    const stopPropagation = (e) => e.stopPropagation();
     [settingsContent, helpWindow].forEach(el => {
         if (!el) return;
-        // 包含所有常见的交互事件 防止冒泡到网页
         ['click', 'mousedown', 'mouseup', 'dblclick', 'keydown', 'keyup', 'keypress', 'contextmenu', 'focus', 'focusin', 'wheel'].forEach(evtName => {
             el.addEventListener(evtName, stopPropagation, false);
         });
     });
-    // --- 事件隔离逻辑 End ---
+    // ------------------
 
     const rulesList = modal.querySelector('#decloak-rules-list');
     const searchInput = modal.querySelector('#decloak-search-input');
@@ -716,14 +669,12 @@ function openSettings() {
             }
 
             const row = document.createElement('div');
-            // 新增：根据启用状态添加 class
             row.className = `decloak-rule-row ${rule.enabled === false ? 'disabled' : ''}`;
 
             if (rule.useRegexMatch === undefined) rule.useRegexMatch = false;
-            // 新增：初始化 enabled 属性
             if (rule.enabled === undefined) rule.enabled = true;
+            if (rule.useUnicode === undefined) rule.useUnicode = false;
 
-            // 修改：在最左侧添加 toggle 按钮
             row.innerHTML = `
                 <button class="decloak-btn decloak-btn-toggle ${rule.enabled ? 'active' : ''}" title="启用/禁用">✔</button>
 
@@ -745,11 +696,12 @@ function openSettings() {
                         <button class="decloak-btn rule-regex-replace ${rule.useRegexReplace ? 'active' : ''}" title="正则替换">.*</button>
                     </div>
                 </div>
+
+                <button class="decloak-btn decloak-btn-unicode ${rule.useUnicode ? 'active' : ''}" title="启用 Unicode 模式">U</button>
+
                 <button class="decloak-btn decloak-btn-danger rule-delete" title="删除规则">X</button>
             `;
 
-            // Bind events
-            // 更新值的同时更新 title
             row.querySelector('.rule-match').oninput = (e) => {
                 currentRules[index].match = e.target.value;
                 e.target.title = e.target.value;
@@ -763,11 +715,10 @@ function openSettings() {
                 e.target.title = e.target.value;
             };
 
-            // 新增：Toggle 按钮点击事件
             const btnToggle = row.querySelector('.decloak-btn-toggle');
             btnToggle.onclick = () => {
                 currentRules[index].enabled = !currentRules[index].enabled;
-                renderRules(); // 重新渲染以更新样式
+                renderRules();
             };
 
             const btnMatchRegex = row.querySelector('.rule-regex-match');
@@ -788,6 +739,12 @@ function openSettings() {
                 renderRules();
             };
 
+            const btnUnicode = row.querySelector('.decloak-btn-unicode');
+            btnUnicode.onclick = () => {
+                currentRules[index].useUnicode = !currentRules[index].useUnicode;
+                renderRules();
+            };
+
             row.querySelector('.rule-delete').onclick = () => {
                 currentRules.splice(index, 1);
                 renderRules();
@@ -805,7 +762,12 @@ function openSettings() {
 
     document.getElementById('decloak-add-rule').onclick = () => {
         searchInput.value = '';
-        currentRules.push({ match: '', find: '', replace: '', useRegexMatch: false, useRegexFind: false, useRegexReplace: false, enabled: true });
+        currentRules.push({
+            match: '', find: '', replace: '',
+            useRegexMatch: false, useRegexFind: false, useRegexReplace: false,
+            useUnicode: false,
+            enabled: true
+        });
         renderRules();
         setTimeout(() => rulesList.scrollTop = rulesList.scrollHeight, 0);
     };
@@ -818,7 +780,6 @@ function openSettings() {
 
     document.getElementById('decloak-close').onclick = () => modal.remove();
 
-    // 帮助按钮逻辑
     const helpBtn = document.getElementById('decloak-help');
     const helpWindowEl = document.getElementById('decloak-help-window');
     const helpCloseBtn = document.getElementById('decloak-help-window-close');
@@ -830,23 +791,18 @@ function openSettings() {
     helpCloseBtn.onclick = () => {
         helpWindowEl.style.setProperty('display', 'none', 'important');
     };
-    // 新增：点击变量自动复制
+
     const helpKeys = modal.querySelectorAll('.decloak-help-key');
     helpKeys.forEach(key => {
         key.onclick = () => {
             const textToCopy = key.innerText;
-
-            // 使用剪贴板 API
             navigator.clipboard.writeText(textToCopy).then(() => {
-                // 复制成功的视觉反馈 (变绿)
                 const originalColor = key.style.color;
                 const originalText = key.innerText;
-
-                key.style.setProperty('color', '#4CAF50', 'important'); // 绿色
+                key.style.setProperty('color', '#4CAF50', 'important');
                 key.innerText = '已复制';
-
                 setTimeout(() => {
-                    key.style.setProperty('color', 'rgb(178, 139, 247)', 'important'); // 恢复原色
+                    key.style.setProperty('color', 'rgb(178, 139, 247)', 'important');
                     key.innerText = originalText;
                 }, 500);
             }).catch(err => {
