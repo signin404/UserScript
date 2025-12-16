@@ -10,7 +10,7 @@
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @run-at       document-start
-// @version      2.8
+// @version      2.9
 // @author       Gemini
 // @license      GPLv3
 // @icon      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAABmJLR0QA/wD/AP+gvaeTAAABZElEQVR4nO3cQUrEMBiAURXv5QFceVJXHsCT6VYGpA5J+6X2vbVI4OPvZNJpHx4AAICredz6g5e3j68jFvKbz/fXzTX+dLb1Pu21EP5GgJgAMQFiAsQEiAkQex79B/fue28dvW9fbb0mICZATIDY8GfAra1r5Og1eLZ6vSYgJkBMgJgAMQFiAsQEiE3/HrDaPn9LvV4TEBMgJkBs+DOg/h3OvVZbrwmICRATICZATICYADEBYrufg4zecx3dt89+vmD22ZEJiAkQEyAmQEyAmAAxAWLDe9p6nz/b6Ho9J3wyAsQEiG3eEx69Rq92jV+NCYgJEBMgdvr3BdXPeI0yATEBYgLELveuiL3PrpwFncz0J2Rmq3dhezMBscu/K6JmAmICxASILb8Lmm21syUTEFt+As72q4p7mYDY5d8VUTMBMQFiAsSWvye85ehnwNwP+GcEiAkQEyAmQEyAmAAAAAAAcJBvjUVu7tMNP9IAAAAASUVORK5CYII=
@@ -74,6 +74,7 @@
     let interactionTarget = null;
     let suppressContextMenu = false;
     let suppressClick = false;
+    let longPressTimer = null;
 
     // 框选相关
     let isCropping = false;
@@ -188,11 +189,19 @@
         const isLoading = text.startsWith('⌛');
         const isError = text.startsWith('❌');
 
-        // 构建标题 HTML
+        // --- 修改开始：标题构建逻辑 ---
         let titleHtml = '';
-        if (method === '远程解析') {
+
+        // 检查是否以 "远程解析" 开头
+        if (method && method.startsWith('远程解析')) {
+            // 提取括号内的源 (如果有)
+            let source = "";
+            const match = method.match(/\((.+?)\)/);
+            if (match) source = match[1];
+
             titleHtml = `<div style="margin-bottom:4px;">
                 <span style="color:${bracketColor}; font-weight:bold;">[远程解析]</span>
+                ${source ? `<span style="color:${parenColor}; font-weight:bold;"> (${escapeHtml(source)})</span>` : ''}
             </div>`;
         } else {
             // 本地解析
@@ -212,7 +221,7 @@
                 ${titleHtml}
                 <div style="color:${contentColor}; margin-bottom:6px;">${escapeHtml(text)}</div>
                 <div style="color:${actionColor}; font-weight:bold; border-top:1px solid #444; padding-top:4px;">
-                    ${isLink ? '🔗 点击打开链接' : '📋 点击复制文本'}
+                    ${isLink ? '🔗 点击打开 | 📋 按住复制' : '📋 点击复制文本'}
                 </div>
             `;
         }
@@ -429,6 +438,92 @@
     }
 
     // === 远程解析 ===
+
+    // === 远程解析辅助函数 ===
+    // 1. 请求 zxing.org
+    function fetchZxing(src) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: "https://zxing.org/w/decode?u=" + encodeURIComponent(src),
+                timeout: 10000, // 10秒超时
+                onload: function(response) {
+                    if (response.status === 200) {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(response.responseText, "text/html");
+                        const tds = doc.querySelectorAll('td');
+                        let resultText = null;
+                        for (let i = 0; i < tds.length; i++) {
+                            if (tds[i].textContent.trim() === "Parsed Result") {
+                                const nextTd = tds[i].nextElementSibling;
+                                if (nextTd) {
+                                    const pre = nextTd.querySelector('pre');
+                                    if (pre) { resultText = pre.textContent; break; }
+                                }
+                            }
+                        }
+                        if (resultText) resolve({ text: resultText, source: "zxing.org" });
+                        else reject("zxing parse error");
+                    } else {
+                        reject("zxing status " + response.status);
+                    }
+                },
+                onerror: (e) => reject("zxing network error"),
+                ontimeout: () => reject("zxing timeout")
+            });
+        });
+    }
+
+    // 2. 请求 api.2dcode.biz
+    function fetch2dCode(src) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: "GET",
+                url: "https://api.2dcode.biz/v1/read-qr-code?file_url=" + encodeURIComponent(src),
+                timeout: 10000,
+                onload: function(response) {
+                    if (response.status === 200) {
+                        try {
+                            const json = JSON.parse(response.responseText);
+                            // 检查 code: 0 和 data.contents 数组
+                            if (json.code === 0 && json.data && json.data.contents && json.data.contents.length > 0) {
+                                resolve({ text: json.data.contents[0], source: "api.2dcode.biz" });
+                            } else {
+                                reject("2dcode api error: " + (json.message || "no data"));
+                            }
+                        } catch (e) {
+                            reject("2dcode json parse error");
+                        }
+                    } else {
+                        reject("2dcode status " + response.status);
+                    }
+                },
+                onerror: (e) => reject("2dcode network error"),
+                ontimeout: () => reject("2dcode timeout")
+            });
+        });
+    }
+
+    // 3. Promise.any Polyfill (确保兼容性)
+    // 返回最先成功的那个 如果全部失败则报错
+    function promiseAny(promises) {
+        if (Promise.any) return Promise.any(promises);
+        return new Promise((resolve, reject) => {
+            let errors = [];
+            let rejectedCount = 0;
+            promises.forEach((p, index) => {
+                Promise.resolve(p).then(resolve).catch(error => {
+                    errors[index] = error;
+                    rejectedCount++;
+                    if (rejectedCount === promises.length) {
+                        reject(new Error("All promises rejected"));
+                    }
+                });
+            });
+        });
+    }
+
+    // === 远程解析主入口 ===
     function scanExternal(target) {
         if (target.tagName !== 'IMG' || !target.src || !/^http/.test(target.src)) {
             requestShowTooltip("❌ 远程解析仅支持 http/https 图片链接", target);
@@ -437,38 +532,28 @@
         const src = target.src;
         requestShowTooltip("⌛ 正在连接远程服务器解析...", target);
 
-        GM_xmlhttpRequest({
-            method: "GET",
-            url: "https://zxing.org/w/decode?u=" + encodeURIComponent(src),
-            onload: function(response) {
-                if (response.status === 200) {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(response.responseText, "text/html");
-                    const tds = doc.querySelectorAll('td');
-                    let resultText = null;
-                    for (let i = 0; i < tds.length; i++) {
-                        if (tds[i].textContent.trim() === "Parsed Result") {
-                            const nextTd = tds[i].nextElementSibling;
-                            if (nextTd) {
-                                const pre = nextTd.querySelector('pre');
-                                if (pre) { resultText = pre.textContent; break; }
-                            }
-                        }
-                    }
-                    if (resultText) {
-                        qrCache.set(src, { status: 'success', text: resultText, method: "远程解析" });
-                        applyQrSuccess(target, resultText, "远程解析");
-                    } else {
-                        requestShowTooltip("❌ 远程解析失败", target);
-                    }
-                } else {
-                    requestShowTooltip("❌ 远程服务器响应错误: " + response.status, target);
-                }
-            },
-            onerror: function() {
-                requestShowTooltip("❌ 网络请求失败", target);
-            }
-        });
+        // 并行发起请求
+        const p1 = fetchZxing(src);
+        const p2 = fetch2dCode(src);
+
+        // 竞速：谁先成功用谁
+        promiseAny([p1, p2])
+            .then(result => {
+                const methodStr = `远程解析 (${result.source})`;
+
+                // 写入缓存 (status: success)
+                qrCache.set(src, { status: 'success', text: result.text, method: methodStr });
+
+                // 显示结果
+                applyQrSuccess(target, result.text, methodStr);
+            })
+            .catch(err => {
+                // 全部失败
+                requestShowTooltip("❌ 远程解析失败", target);
+
+                // 写入失败缓存
+                qrCache.set(src, { status: 'failed', reason: 'remote_all_failed' });
+            });
     }
 
     // ==========================================
@@ -909,10 +994,9 @@
     // ==========================================
 
     function applyQrSuccess(el, text, method) {
-        if (!method.includes("框选")) {
-            el.dataset.hasQr = "true";
-            el.classList.add('qr-detected-style');
-        }
+        el.dataset.hasQr = "true";
+        el.classList.add('qr-detected-style');
+
         requestShowTooltip(text, el, method);
     }
 
@@ -1009,6 +1093,12 @@
     });
 
     document.addEventListener('mouseout', (e) => {
+        // 清除长按定时器
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+
         const t = e.target;
         if (t.tagName === 'IMG' || t.tagName === 'CANVAS') {
             clearTimeout(hoverTimer);
@@ -1023,13 +1113,16 @@
     document.addEventListener('mousedown', (e) => {
         if (isCropping) return;
 
+        // 右键逻辑
         if (e.button === 2) {
             isRightClickHolding = true;
             leftClickCount = 0;
             interactionTarget = e.target;
             suppressContextMenu = false;
         }
+        // 左键逻辑
         else if (e.button === 0) {
+            // 1. 组合键逻辑 (右键按住 + 左键点击)
             if (isRightClickHolding) {
                 if (interactionTarget && (interactionTarget.tagName === 'IMG' || interactionTarget.tagName === 'CANVAS')) {
                     e.preventDefault();
@@ -1040,11 +1133,42 @@
                     suppressContextMenu = true;
                     suppressClick = true;
                 }
+                return; // 组合键模式下不触发长按
+            }
+
+            // 2. 长按复制逻辑
+            const target = e.target;
+            if ((target.tagName === 'IMG' || target.tagName === 'CANVAS') && target.dataset.hasQr === "true") {
+                // 获取数据
+                let data = null;
+                let cacheData = null;
+                if (target.tagName === 'IMG') cacheData = qrCache.get(target.src);
+                else cacheData = canvasCache.get(target);
+
+                if (cacheData && cacheData.status === 'success') {
+                    data = cacheData.text;
+                }
+
+                // 只有当结果是链接时 才启用长按复制
+                if (data && isUrl(data)) {
+                    longPressTimer = setTimeout(() => {
+                        GM_setClipboard(data);
+                        requestFeedback(); // 显示 "已复制"
+                        suppressClick = true; // 关键：阻止后续的 click 事件打开链接
+                        longPressTimer = null; // 重置定时器
+                    }, 500);
+                }
             }
         }
     }, true);
 
     document.addEventListener('mouseup', (e) => {
+        // 清除长按定时器
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+
         if (isCropping) return;
 
         if (e.button === 2) {
