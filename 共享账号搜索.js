@@ -10,7 +10,14 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_registerMenuCommand
 // @grant        GM_setClipboard
-// @version      1.7
+// @grant        GM_openInTab
+// @grant        GM_closeTab
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_deleteValue
+// @grant        GM_addValueChangeListener
+// @grant        GM_removeValueChangeListener
+// @version      1.8
 // @author       Hồng Minh Tâm & Gemini
 // @license      GPLv3
 // @icon        data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAA6lBMVEVHcEz9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH7SD/9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkEk7mAFAAAATXRSTlMABrJ4kx/v8ffNAVx0RPn4qGVZv/uIPa7EdiAOYIqh3DjX4VdjuPPoE+5YTtSHYsB5gMj6FDsjpEDTZjzdmsIanuT0BdqLnAsERlPskaOVQUwAAACxSURBVBjTbc/VDsJQEATQKdTQFooVK+7u7g77/7/D7SUBEpiHTc68TBb4m2wGyBe/ikJOLlVrH1fKxKKM3kWdeAIvBUVh0LC9WAtikBUxWk615nAeJutEMVZIphqaAIKDQpopAXFpv9twO8P+sxSHoh7Iw40rWaoCMX2kADdu9EiL9s52xQ39fmE3kYyySdszomgygRTJ3jG5up026V6ZUogYPrg9PX/f1XLDZ0R+Hn8C9iYYIKWYFpsAAAAASUVORK5CYII=
@@ -18,6 +25,81 @@
 
 (function () {
   'use strict';
+
+  // --- 工兵模式：在 BugMeNot 标签页中运行 ---
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('userscript_action') === 'fetch_bmn_data') {
+    const requestId = urlParams.get('request_id');
+
+    const send = () => {
+        // 检测页面是否明确表示无数据 立即关闭
+        const bodyText = document.body.innerText;
+        const noData = bodyText.includes('No logins found') ||
+                       bodyText.includes('barred from the bugmenot system');
+
+        const list = [];
+        if (!noData) {
+            const accountElements = document.querySelectorAll('article.account');
+            for (const accountEl of accountElements) {
+                try {
+                    let username = '', password = '', email = '';
+                    accountEl.querySelectorAll('dl dt').forEach(dt => {
+                        const key = dt.textContent.trim().toLowerCase().replace(':', '');
+                        const dd = dt.nextElementSibling;
+                        if (dd && dd.tagName === 'DD') {
+                            const kbd = dd.querySelector('kbd');
+                            if (kbd) {
+                                const value = kbd.textContent.trim();
+                                if (key.startsWith('username')) username = value;
+                                else if (key.startsWith('password')) password = value;
+                                else if (key.startsWith('other')) email = value;
+                            }
+                        }
+                    });
+                    if (!username || !password) continue;
+                    const statsEl = accountEl.querySelector('.success_rate');
+                    const match = statsEl && statsEl.textContent.match(/(\d+)%/);
+                    const ageEl = accountEl.querySelector('.account__stats li:last-child');
+                    list.push({
+                        username, password, email,
+                        success: match ? parseInt(match[1], 10) : 0,
+                        time: ageEl ? ageEl.textContent.trim() : ''
+                    });
+                } catch(e) {}
+            }
+        }
+
+        GM_setValue('bmn_response_' + requestId, JSON.stringify(list));
+        setTimeout(() => window.close(), 300);
+    };
+
+    const trySend = () => {
+        const bodyText = document.body.innerText;
+        const hasAccounts = document.querySelectorAll('article.account').length > 0;
+        const noData = bodyText.includes('No logins found') ||
+                       bodyText.includes('barred from the bugmenot system');
+
+        if (hasAccounts || noData) {
+            send();
+            return;
+        }
+        const obs = new MutationObserver(() => {
+            const bodyText = document.body.innerText;
+            const hasAccounts = document.querySelectorAll('article.account').length > 0;
+            const noData = bodyText.includes('No logins found') ||
+                           bodyText.includes('barred from the bugmenot system');
+            if (hasAccounts || noData) {
+                obs.disconnect();
+                send();
+            }
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => { obs.disconnect(); send(); }, 30000);
+    };
+
+    trySend();
+    return;
+}
 
   const icons = {
     mail: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path fill="currentColor" d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"></path></svg>'
@@ -255,23 +337,47 @@
   // --- 解析函数 ---
 
   function parseBugMeNot(responseText) {
-      var bmnEl = responseText.toDOM(true);
-      var accountEls = bmnEl.getElementsByClassName('account');
-      const list = [];
-      for (var i = 0; i < accountEls.length; i++) {
-          var accountEl = accountEls[i];
-          var infoEl = accountEl.getElementsByTagName('kbd');
-          var statsEl = accountEl.getElementsByClassName('stats')[1].getElementsByTagName('li');
+      // 传入的 responseText 现在是包含明文的 document.body.innerHTML
+      const doc = responseText.toDOM(true);
+      const list =[];
+      const accountElements = doc.querySelectorAll('article.account');
 
-          if (infoEl.length < 2) continue;
+      for (const accountEl of accountElements) {
+          try {
+              let username = '', password = '', email = '';
+              const dtElements = accountEl.querySelectorAll('dl dt');
 
-          list.push({
-              username: infoEl[0].innerHTML || '',
-              password: infoEl[1].innerHTML || '',
-              email: (infoEl[2] && infoEl[2].innerHTML) ? infoEl[2].innerHTML : '',
-              success: parseInt(statsEl[0].innerHTML.match(/\d+(?=%)/) ? statsEl[0].innerHTML.match(/\d+(?=%)/)[0] : 0),
-              time: statsEl[2].innerHTML
-          });
+              dtElements.forEach(dt => {
+                  const key = dt.textContent.trim().toLowerCase().replace(':', '');
+                  const dd = dt.nextElementSibling;
+                  if (dd && dd.tagName === 'DD') {
+                      const kbd = dd.querySelector('kbd');
+                      if (kbd) {
+                          let value = kbd.textContent.trim();
+                          if (key.startsWith('username')) username = value;
+                          else if (key.startsWith('password')) password = value;
+                          else if (key.startsWith('other')) email = value;
+                      }
+                  }
+              });
+
+
+
+              const statsEl = accountEl.querySelector('.success_rate');
+              let successRate = 0;
+              if (statsEl) {
+                  const match = statsEl.textContent.match(/(\d+)%/);
+                  if (match) successRate = parseInt(match[1], 10);
+              }
+
+              const ageEl = accountEl.querySelector('.account__stats li:last-child');
+              const timeStr = ageEl ? ageEl.textContent.trim() : '';
+
+              list.push({ username, password, email, success: successRate, time: timeStr });
+
+          } catch (e) {
+              console.error('Failed to parse a BugMeNot account element', e, accountEl);
+          }
       }
       return list;
   }
@@ -542,35 +648,78 @@
       sourceStatus[source.key].pending++;
       updateSourceUI(source.key);
 
-      GM_xmlhttpRequest({
-          method: 'GET',
-          url: source.url(domain),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          onload: function(response) {
-              try {
-                  const newAccounts = source.parser(response.responseText);
-                  if (newAccounts && newAccounts.length > 0) {
-                      const existing = sourceData[source.key];
-                      newAccounts.forEach(acc => {
-                          const exists = existing.some(ex => ex.username === acc.username && ex.password === acc.password);
-                          if (!exists) {
-                              existing.push(acc);
-                          }
-                      });
-                      existing.sort((a, b) => b.success - a.success);
+    if (source.key === 'bugmenot') {
+    // 域名加入 requestId 彻底避免碰撞
+    const requestId = `bmn_${domain.replace(/\./g, '_')}_${Date.now()}`;
+    GM_setValue('bmn_response_' + requestId, '');
+
+    let elapsed = 0;
+    const poller = setInterval(() => {
+        elapsed += 500;
+        const raw = GM_getValue('bmn_response_' + requestId, '');
+        if (raw !== '') {
+            clearInterval(poller);
+            GM_deleteValue('bmn_response_' + requestId);
+            try {
+                const newAccounts = JSON.parse(raw);
+                if (newAccounts && newAccounts.length > 0) {
+                    const existing = sourceData[source.key];
+                    newAccounts.forEach(acc => {
+                        const exists = existing.some(ex => ex.username === acc.username && ex.password === acc.password);
+                        if (!exists) existing.push(acc);
+                    });
+                    existing.sort((a, b) => b.success - a.success);
+                }
+            } catch(e) {}
+            sourceStatus[source.key].pending--;
+            updateSourceUI(source.key);
+            return;
+        }
+        if (elapsed >= 30000) {
+            clearInterval(poller);
+            GM_deleteValue('bmn_response_' + requestId);
+            sourceStatus[source.key].pending--;
+            updateSourceUI(source.key);
+        }
+    }, 500);
+
+    // 错开标签页打开时间 避免浏览器拦截第二个弹窗
+    const tabDelay = sourceStatus[source.key].pending > 1 ? 500 : 0;
+    setTimeout(() => {
+        GM_openInTab(`${source.url(domain)}?userscript_action=fetch_bmn_data&request_id=${requestId}`, { active: false });
+    }, tabDelay);
+} else {
+          // 对于其他网站 继续使用旧的 GM_xmlhttpRequest 方法
+          GM_xmlhttpRequest({
+              method: 'GET',
+              url: source.url(domain),
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              onload: function(response) {
+                  try {
+                      const newAccounts = source.parser(response.responseText);
+                      if (newAccounts && newAccounts.length > 0) {
+                          const existing = sourceData[source.key];
+                          newAccounts.forEach(acc => {
+                              const exists = existing.some(ex => ex.username === acc.username && ex.password === acc.password);
+                              if (!exists) {
+                                  existing.push(acc);
+                              }
+                          });
+                          existing.sort((a, b) => b.success - a.success);
+                      }
+                  } catch (e) {
+                      console.error(`Error parsing ${source.name} for ${domain}`, e);
+                  } finally {
+                      sourceStatus[source.key].pending--;
+                      updateSourceUI(source.key);
                   }
-              } catch (e) {
-                  console.error(`Error parsing ${source.name} for ${domain}`, e);
-              } finally {
+              },
+              onerror: function() {
                   sourceStatus[source.key].pending--;
                   updateSourceUI(source.key);
               }
-          },
-          onerror: function() {
-              sourceStatus[source.key].pending--;
-              updateSourceUI(source.key);
-          }
-      });
+          });
+      }
   }
 
   function fetchData() {
@@ -593,10 +742,10 @@
     const hostname = location.hostname;
     const rootDomain = getRootDomain(hostname);
 
-    const domainsToCheck = [hostname];
-    if (hostname !== rootDomain) {
-        domainsToCheck.push(rootDomain);
-    }
+    const domainsToCheck = Array.from(new Set([
+        hostname.replace(/^www\./i, ''),
+        rootDomain
+    ]));
 
     SOURCES.forEach(source => {
         domainsToCheck.forEach(domain => {
