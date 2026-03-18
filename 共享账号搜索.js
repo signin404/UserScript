@@ -17,7 +17,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_addValueChangeListener
 // @grant        GM_removeValueChangeListener
-// @version      1.8
+// @version      1.9
 // @author       Hồng Minh Tâm & Gemini
 // @license      GPLv3
 // @icon        data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAMAAAAoLQ9TAAAA6lBMVEVHcEz9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH7SD/9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkH9SkEk7mAFAAAATXRSTlMABrJ4kx/v8ffNAVx0RPn4qGVZv/uIPa7EdiAOYIqh3DjX4VdjuPPoE+5YTtSHYsB5gMj6FDsjpEDTZjzdmsIanuT0BdqLnAsERlPskaOVQUwAAACxSURBVBjTbc/VDsJQEATQKdTQFooVK+7u7g77/7/D7SUBEpiHTc68TBb4m2wGyBe/ikJOLlVrH1fKxKKM3kWdeAIvBUVh0LC9WAtikBUxWk615nAeJutEMVZIphqaAIKDQpopAXFpv9twO8P+sxSHoh7Iw40rWaoCMX2kADdu9EiL9s52xQ39fmE3kYyySdszomgygRTJ3jG5up026V6ZUogYPrg9PX/f1XLDZ0R+Hn8C9iYYIKWYFpsAAAAASUVORK5CYII=
@@ -32,13 +32,16 @@
     const requestId = urlParams.get('request_id');
 
     const send = () => {
-        // 检测页面是否明确表示无数据 立即关闭
         const bodyText = document.body.innerText;
-        const noData = bodyText.includes('No logins found') ||
-                       bodyText.includes('barred from the bugmenot system');
+        const isBarred = bodyText.includes('barred from the bugmenot system');
+        const isNoLogins = bodyText.includes('No logins found');
 
-        const list = [];
-        if (!noData) {
+        let status = 'success';
+        if (isBarred) status = 'barred';
+        else if (isNoLogins) status = 'no_logins';
+
+        const list =[];
+        if (status === 'success') {
             const accountElements = document.querySelectorAll('article.account');
             for (const accountEl of accountElements) {
                 try {
@@ -69,26 +72,26 @@
             }
         }
 
-        GM_setValue('bmn_response_' + requestId, JSON.stringify(list));
+        GM_setValue('bmn_response_' + requestId, JSON.stringify({ status, data: list }));
         setTimeout(() => window.close(), 300);
     };
 
     const trySend = () => {
         const bodyText = document.body.innerText;
         const hasAccounts = document.querySelectorAll('article.account').length > 0;
-        const noData = bodyText.includes('No logins found') ||
-                       bodyText.includes('barred from the bugmenot system');
+        const isBarred = bodyText.includes('barred from the bugmenot system');
+        const isNoLogins = bodyText.includes('No logins found');
 
-        if (hasAccounts || noData) {
+        if (hasAccounts || isBarred || isNoLogins) {
             send();
             return;
         }
         const obs = new MutationObserver(() => {
             const bodyText = document.body.innerText;
             const hasAccounts = document.querySelectorAll('article.account').length > 0;
-            const noData = bodyText.includes('No logins found') ||
-                           bodyText.includes('barred from the bugmenot system');
-            if (hasAccounts || noData) {
+            const isBarred = bodyText.includes('barred from the bugmenot system');
+            const isNoLogins = bodyText.includes('No logins found');
+            if (hasAccounts || isBarred || isNoLogins) {
                 obs.disconnect();
                 send();
             }
@@ -563,16 +566,21 @@
       const countSpan = document.getElementById(`bmn-count-${sourceKey}`);
       if (!container || !countSpan) return;
 
+      const count = sourceData[sourceKey].length;
       if (sourceStatus[sourceKey].pending > 0) {
-          countSpan.innerText = '加载中...';
-          countSpan.style.color = '#17a2b8';
+          if (count > 0) {
+              countSpan.innerText = `${count} (获取中...)`;
+              countSpan.style.color = '#76CA53';
+          } else {
+              countSpan.innerText = '加载中...';
+              countSpan.style.color = '#17a2b8';
+          }
       } else {
-          const count = sourceData[sourceKey].length;
           countSpan.innerText = count;
           countSpan.style.color = count > 0 ? '#76CA53' : '#888';
       }
 
-      if (sourceStatus[sourceKey].pending > 0 && sourceData[sourceKey].length === 0) {
+      if (sourceStatus[sourceKey].pending > 0 && count === 0) {
           if (container.innerHTML === '') {
                container.innerHTML = '<div class="bmn-loading">正在加载...</div>';
           }
@@ -642,9 +650,59 @@
 
           container.appendChild(itemBMNEl);
       });
+
+      if (sourceStatus[sourceKey].pending > 0) {
+          const loadingMore = document.createElement('div');
+          loadingMore.className = 'bmn-loading';
+          loadingMore.innerText = '正在获取更多...';
+          loadingMore.style.backgroundColor = 'transparent';
+          loadingMore.style.color = '#17a2b8';
+          loadingMore.style.borderTop = '1px solid rgba(128, 128, 128, 0.2)';
+          container.appendChild(loadingMore);
+      }
+  }
+
+  function processNewAccounts(sourceKey, newAccounts) {
+      if (!newAccounts || newAccounts.length === 0) return;
+      const existing = sourceData[sourceKey];
+      newAccounts.forEach(acc => {
+          const exists = existing.some(ex => ex.username === acc.username && ex.password === acc.password);
+          if (!exists) existing.push(acc);
+      });
+      existing.sort((a, b) => b.success - a.success);
   }
 
   function fetchSourceDomain(source, domain) {
+      const cacheKey = `bmn_cache_${source.key}_${domain}`;
+      const cachedStr = GM_getValue(cacheKey, null);
+      const now = Date.now();
+      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+
+      if (cachedStr) {
+          try {
+              const cache = JSON.parse(cachedStr);
+              if (source.key === 'bugmenot') {
+                  if (cache.status === 'barred') {
+                      updateSourceUI(source.key);
+                      return;
+                  } else if (cache.status === 'no_logins' && (now - cache.timestamp < sevenDays)) {
+                      updateSourceUI(source.key);
+                      return;
+                  } else if (cache.data && cache.data.length > 0 && (now - cache.timestamp < sevenDays)) {
+                      processNewAccounts(source.key, cache.data);
+                      updateSourceUI(source.key);
+                      return;
+                  }
+              } else {
+                  if (cache.data && cache.data.length > 0 && (now - cache.timestamp < sevenDays)) {
+                      processNewAccounts(source.key, cache.data);
+                      updateSourceUI(source.key);
+                      return;
+                  }
+              }
+          } catch (e) {}
+      }
+
       sourceStatus[source.key].pending++;
       updateSourceUI(source.key);
 
@@ -661,14 +719,17 @@
             clearInterval(poller);
             GM_deleteValue('bmn_response_' + requestId);
             try {
-                const newAccounts = JSON.parse(raw);
-                if (newAccounts && newAccounts.length > 0) {
-                    const existing = sourceData[source.key];
-                    newAccounts.forEach(acc => {
-                        const exists = existing.some(ex => ex.username === acc.username && ex.password === acc.password);
-                        if (!exists) existing.push(acc);
-                    });
-                    existing.sort((a, b) => b.success - a.success);
+                const response = JSON.parse(raw);
+                const status = response.status || 'success';
+                const newAccounts = response.data ||[];
+
+                if (status === 'barred') {
+                    GM_setValue(cacheKey, JSON.stringify({ timestamp: Date.now(), status: 'barred', data:[] }));
+                } else if (status === 'no_logins') {
+                    GM_setValue(cacheKey, JSON.stringify({ timestamp: Date.now(), status: 'no_logins', data:[] }));
+                } else if (newAccounts.length > 0) {
+                    GM_setValue(cacheKey, JSON.stringify({ timestamp: Date.now(), status: 'success', data: newAccounts }));
+                    processNewAccounts(source.key, newAccounts);
                 }
             } catch(e) {}
             sourceStatus[source.key].pending--;
@@ -684,7 +745,7 @@
     }, 500);
 
     // 错开标签页打开时间 避免浏览器拦截第二个弹窗
-    const tabDelay = sourceStatus[source.key].pending > 1 ? 500 : 0;
+    const tabDelay = sourceStatus[source.key].pending > 1 ? 50 : 0;
     setTimeout(() => {
         GM_openInTab(`${source.url(domain)}?userscript_action=fetch_bmn_data&request_id=${requestId}`, { active: false });
     }, tabDelay);
@@ -698,14 +759,8 @@
                   try {
                       const newAccounts = source.parser(response.responseText);
                       if (newAccounts && newAccounts.length > 0) {
-                          const existing = sourceData[source.key];
-                          newAccounts.forEach(acc => {
-                              const exists = existing.some(ex => ex.username === acc.username && ex.password === acc.password);
-                              if (!exists) {
-                                  existing.push(acc);
-                              }
-                          });
-                          existing.sort((a, b) => b.success - a.success);
+                          GM_setValue(cacheKey, JSON.stringify({ timestamp: Date.now(), data: newAccounts }));
+                          processNewAccounts(source.key, newAccounts);
                       }
                   } catch (e) {
                       console.error(`Error parsing ${source.name} for ${domain}`, e);
